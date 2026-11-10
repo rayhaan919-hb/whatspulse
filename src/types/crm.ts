@@ -69,8 +69,41 @@ export interface Message {
     selectedButtonId?: string;
   };
   status: MessageStatus;
+  errorCode?: number;
+  errorDetails?: { code: number; title: string; message: string } | string;
   isInternalNote?: boolean;
   createdAt: string;
+}
+
+export interface WebhookEventRecord {
+  id: string;
+  workspaceId?: string;
+  phoneNumberId?: string;
+  payload: MetaWebhookPayload;
+  receivedAt: string;
+  processedAt?: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'dead_letter';
+  attempts: number;
+  lastError?: string;
+}
+
+export interface PendingStatusRecord {
+  id: string;
+  workspaceId: string;
+  waMessageId: string;
+  status: MessageStatus;
+  errorCode?: number;
+  errorDetails?: { code: number; title: string; message: string };
+  timestamp: string;
+  isApplied: boolean;
+}
+
+export interface TenantRoutingConfig {
+  workspaceId: string;
+  phoneNumberId: string;
+  pathToken?: string;
+  appSecret: string;
+  webhookVerifyToken: string;
 }
 
 export interface Conversation {
