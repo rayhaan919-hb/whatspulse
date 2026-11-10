@@ -1,58 +1,70 @@
 # ⚡ WhatsPulse CRM — Official Meta WhatsApp Cloud API SaaS & Multi-Agent Inbox
 
-> **The modern, high-converting WhatsApp CRM and Broadcast Suite built with Next.js 16 (Turbopack), React 19, TypeScript, Tailwind CSS, and Supabase.**
-> Built strictly on the official Meta WhatsApp Cloud API (no unofficial QR-scan libraries), with opt-in and quality tooling to reduce restriction risk.
+> **The modern, high-converting WhatsApp CRM and Broadcast Suite built with Next.js 16 (Turbopack), React 19, TypeScript strict, Tailwind CSS, and Supabase.**  
+> Built strictly on the official Meta WhatsApp Cloud API (v20+), with zero unofficial QR-scan libraries or reverse-engineered protocols, featuring proactive opt-in compliance ledgers and tier health monitors to minimize restriction risk.
+
+## ⚡ 1-Click Vercel Deployment
+
+Click the button below to deploy WhatsPulse CRM directly to Vercel with automatic serverless route configuration and optimized edge caching:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyour-org%2Fwhatspulse-crm&env=NEXT_PUBLIC_APP_URL,META_PHONE_NUMBER_ID,META_WABA_ID,META_ACCESS_TOKEN,META_APP_SECRET,META_WEBHOOK_VERIFY_TOKEN,ENCRYPTION_KEY,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY)
 
 ---
 
-## 🚀 Key Features
+## 📋 System Requirements
 
-* **🛡️ Official Meta WhatsApp Cloud API Architecture:**
-  * Direct integration with official Meta Developer APIs (no unofficial QR-scan libraries, no Puppeteer browser instances, no WhatsApp Web disconnections).
-  * Built-in opt-in compliance ledger and quality monitoring tools to minimize restriction risks.
-  * 1,000 free monthly service conversations included by Meta.
+Before running WhatsPulse CRM, make sure you have:
 
-* **💬 Live Multi-Agent Unified Team Inbox:**
-  * Real-time conversation updates with filter tabs (`All`, `Mine`, `Unassigned`, `Resolved`).
-  * Authentic WhatsApp Web chat timeline with delivery status receipts (`sent`, `delivered`, `read` with blue double ticks).
-  * Internal Team Notes (private notes that are never sent over WhatsApp).
-  * Pre-approved Meta Template selector and quick response triggers.
-
-* **✨ AI Copilot for Human Support Agents:**
-  * 1-Click suggested replies contextually drafted from conversation history.
-  * AI conversation summarizer to produce instant executive briefs for agent handoffs.
-  * Real-time customer sentiment detection (`Positive`, `Neutral`, `Frustrated`).
-
-* **📢 WhatsApp Broadcast Campaigns & Template Manager:**
-  * Segmented bulk messaging using pre-approved Meta templates.
-  * Target audience tag filtering (e.g. `VIP Client`, `Wholesale`).
-  * Live campaign analytics: Sent, Delivered %, Read %, and Failed rates.
-
-* **👥 Comprehensive Customer CRM Directory:**
-  * Contact profiles with phone number, email, custom CRM attributes, and tag chips.
-  * One-click CSV export and instant chat launcher.
-
-* **🧪 Built-in Interactive Webhook & API Simulator:**
-  * Test and demonstrate full WhatsApp messaging, interactive button clicks, and blue tick receipts without needing an active Meta account right away.
-  * View raw incoming Meta Webhook JSON payloads.
+* **Node.js:** `>= 20.0.0` (LTS recommended, verified on Node.js v22).
+* **Supabase Project:** Free or Pro PostgreSQL database with Row Level Security (RLS) and Realtime enabled.
+* **Meta Developer App:** Official WhatsApp Cloud API enabled with an Admin System User permanent access token and Webhook subscription.
+* **Google Gemini API Key (Optional):** For context-aware AI Copilot agent drafts and sentiment analysis (free tier available at Google AI Studio).
 
 ---
 
-## 🛠️ Tech Stack
+## 🚀 Key Architectural Features
 
-* **Framework:** Next.js 15 (App Router, Server & Client Components)
-* **Language:** TypeScript 5
-* **Styling:** Tailwind CSS 4
-* **Database & Realtime:** Supabase PostgreSQL with Row Level Security (RLS) & Realtime Publication
-* **WhatsApp Engine:** Meta Graph API v20+ with HMAC SHA-256 Webhook Verification
-* **AI Engine:** Google Gemini 1.5 Flash / OpenAI API with fallback heuristics
+* **🛡️ Official Meta WhatsApp Cloud API v20+ Integration:**
+  * Raw-body HMAC-SHA256 signature verification via `crypto.timingSafeEqual`.
+  * Monotonic status ranking ensuring out-of-order `delivered` receipts never downgrade stored `read` statuses.
+  * Late-message status inheritance and idempotent deduplication of Meta `wamid` messages.
+  * Server-side 24-hour Customer Care Window enforcement and 72-hour Free Entry Point (FEP) cost attribution.
+
+* **🔒 Enterprise Cryptography at Rest:**
+  * Meta System User tokens and App Secrets encrypted at rest using **AES-256-GCM** with versioned key prefixes (`v1:`, `v2:`).
+  * Multi-version keyring for zero-downtime key rotation (`scripts/migrate-secrets.mjs`).
+  * Isolated `workspace_secrets` table strictly restricted to `service_role` (no `anon` or `authenticated` access).
+
+* **💬 Unified Team Inbox & Productivity:**
+  * Warm editorial design system (`#fffcec` canvas, `#f7f4e3` surfaces, `#000354` ink) with accessible contrast (20.4:1).
+  * Bidirectional internationalization: English (LTR) and Arabic (RTL) wired end-to-end.
+  * Canned replies autocomplete via `/` shortcut with dynamic placeholders (`{{contact_name}}`, `{{agent_name}}`).
+  * Round-robin and least-loaded auto-assignment, snooze with auto-reopen on reply, and private notes with `@mention` notifications.
+  * Collision detection (who is viewing/typing) and claim-on-reply protection.
+
+* **📊 Cost & Compliance Cockpit:**
+  * Spend attribution per workspace, campaign, and day based on status webhook `pricing` objects.
+  * Custom Meta rate card importer with tier overrides.
+  * Full opt-in/opt-out ledger with automatic `STOP` / `UNSUBSCRIBE` keyword processing.
+  * Pre-send broadcast campaign compliance audit flagging contacts without verified opt-in.
+
+* **🔌 External REST API & Outbound Webhooks:**
+  * Documented REST API (`/api/v1/messages`, `/api/v1/contacts`, `/api/v1/conversations`) authenticated via hashed `wp_live_` API keys.
+  * Complete OpenAPI 3.1 specification at `docs/openapi.yaml`.
+  * Outbound webhook subscriptions with HMAC-SHA256 signatures (`X-WhatsPulse-Signature-256`) and replay attack protection.
+
+* **🔍 Admin System Diagnostics Cockpit:**
+  * Accessible at `/admin/system-status`.
+  * Live verification of Supabase, Meta Graph API tokens, App Secrets, Webhooks, Encryption Keys, and Gemini AI without ever leaking secret values.
 
 ---
 
 ## 🏃 Quick Start (Local Development)
 
-### 1. Install Dependencies
+### 1. Clone Repository & Install Dependencies
 ```bash
+git clone https://github.com/your-org/whatspulse-crm.git
+cd whatspulse-crm
 npm install
 ```
 
@@ -61,8 +73,15 @@ Copy `.env.example` to `.env.local`:
 ```bash
 cp .env.example .env.local
 ```
+Fill in your credentials in `.env.local` (see [docs/INSTALL.md](docs/INSTALL.md) for full instructions).
 
-### 3. Run Development Server
+### 3. Run Turnkey Setup Wizard
+```bash
+npm run setup
+```
+The wizard validates your environment, tests database connections, checks SQL migrations, formats the admin user seed, and runs a webhook self-check.
+
+### 4. Start Development Server
 ```bash
 npm run dev
 ```
@@ -70,13 +89,20 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 📦 Packaging for CodeCanyon & Freelance Gigs
+## 📚 Documentation & Guides
 
-WhatsPulse CRM is structured to be sold as:
-1. **CodeCanyon Digital Product:** A complete, self-hostable multi-tenant WhatsApp CRM script.
-2. **Upwork / Fiverr Service:** A turn-key deployment offering: *"I will set up and customize an Official WhatsApp CRM with AI Agents for your business."*
+* **[Turnkey Installation & Deployment Guide](docs/INSTALL.md):** Complete guide for local dev, Supabase migrations, Vercel 1-click, and Docker/VPS self-hosting.
+* **[Official Meta WhatsApp Cloud API Setup](docs/META_SETUP.md):** Step-by-step walkthrough for Meta Developer Apps, Business Portfolio, permanent System User tokens, and Webhook subscription.
+* **[Troubleshooting & Diagnostics](docs/TROUBLESHOOTING.md):** Solutions for common Webhook 403s, 24-hour care window (error 131047), token expiration (error 190), and encryption keys.
+* **[External REST API & Webhooks](docs/API.md):** Reference guide and integration examples for external CRM automation.
+* **[OpenAPI 3.1 Specification](docs/openapi.yaml):** Machine-readable API schema.
+* **[Internationalization (i18n) Guide](docs/I18N_GUIDE.md):** How to add new languages in 3 simple steps.
+* **[Realtime Architecture Evaluation](docs/REALTIME_ARCHITECTURE.md):** Technical evaluation of Supabase Realtime Broadcast vs Postgres Changes.
+* **[Changelog](CHANGELOG.md):** Release history and compliance enhancements.
+* **[Credits & Third-Party Licenses](CREDITS.md):** Attribution for open-source frameworks, typography, and icons.
 
 ---
 
-## 📄 License
-Commercial Product License. All rights reserved.
+## 📄 Commercial License
+
+Commercial Turnkey Product License. All rights reserved.
