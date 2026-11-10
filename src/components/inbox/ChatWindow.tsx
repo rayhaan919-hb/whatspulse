@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Conversation, Message, WorkspaceMember, MessageTemplate } from '@/types/crm';
+import { CareWindowService } from '@/lib/whatsapp/care-window';
+import { MetaErrorMapper } from '@/lib/whatsapp/errors';
 
 interface ChatWindowProps {
   conversation: Conversation;
@@ -38,6 +40,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+
+  const remainingWindowMs = CareWindowService.getTimeRemainingMs(conversation.lastInboundAt);
+  const isWindowOpen = CareWindowService.validateOutboundSend({
+    isTemplate: false,
+    lastInboundAt: conversation.lastInboundAt,
+    fepExpiresAt: conversation.fepExpiresAt,
+  }).allowed;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -140,9 +149,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 {conversation.contact.phoneNumber}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-[#696969] truncate">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3139fb] shrink-0"></span>
-              <span className="truncate">WhatsApp Active • 24h Reply Window Open</span>
+            <div className="flex items-center gap-1.5 text-[11px] truncate">
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  isWindowOpen ? 'bg-[#3139fb]' : 'bg-[#fb3a4d]'
+                }`}
+              />
+              <span
+                className={`font-semibold truncate ${
+                  isWindowOpen ? 'text-[#3139fb]' : 'text-[#fb3a4d]'
+                }`}
+              >
+                {isWindowOpen
+                  ? `WhatsApp Active • ${CareWindowService.formatCountdown(remainingWindowMs)}`
+                  : 'Care Window Closed • Template Messages Only'}
+              </span>
             </div>
           </div>
         </div>
@@ -297,6 +318,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           >
                             ✓✓
                           </span>
+                        ) : msg.status === 'failed' ? (
+                          <span
+                            className="text-[#fb3a4d] font-bold text-xs"
+                            title="Delivery failed"
+                          >
+                            ⚠️ Failed
+                          </span>
                         ) : (
                           <span
                             className="text-[#fffcec]/60 font-bold text-xs"
@@ -308,6 +336,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </span>
                     )}
                   </div>
+
+                  {/* Failure Reason & Retry Action */}
+                  {isOutbound && msg.status === 'failed' && (
+                    <div className="mt-2 pt-2 border-t border-white/20 text-left">
+                      <p className="text-[11px] text-[#fb3a4d] font-semibold leading-tight">
+                        {MetaErrorMapper.mapError(
+                          msg.errorCode,
+                          typeof msg.errorDetails === 'string'
+                            ? msg.errorDetails
+                            : msg.errorDetails?.message
+                        ).userMessage}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onSendMessage({
+                            content: msg.content,
+                            isInternalNote: false,
+                          })
+                        }
+                        className="mt-1.5 px-2.5 py-0.5 text-[10px] font-bold bg-[#fb3a4d] hover:bg-[#d82a3c] text-[#fffcec] rounded-[6px] transition-colors cursor-pointer"
+                      >
+                        Retry ↺
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -433,13 +487,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <button
                 type="button"
                 onClick={toggleTemplates}
-                className={`px-3 py-1 rounded-[8px] border text-xs font-semibold transition-colors cursor-pointer ${
-                  showTemplates
+                className={`px-3 py-1 rounded-[8px] border text-xs font-semibold transition-all cursor-pointer ${
+                  !isWindowOpen
+                    ? 'bg-[#3139fb] hover:bg-[#000354] text-[#fffcec] border-[#3139fb] font-bold shadow-xs'
+                    : showTemplates
                     ? 'bg-black text-[#fffcec] border-black'
                     : 'bg-[#fffcec] text-black border-black/20 hover:bg-[#f7f4e3]'
                 }`}
               >
-                📋 Templates
+                {!isWindowOpen ? '📋 Send Approved Template ➔' : '📋 Templates'}
               </button>
             )}
           </div>
@@ -448,7 +504,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <button
             type="button"
             onClick={handleTriggerAI}
-            className="px-3 py-1 rounded-[8px] bg-[#3139fb]/10 hover:bg-[#3139fb]/20 text-[#3139fb] text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+            disabled={!isWindowOpen && !isInternalNote}
+            className="px-3 py-1 rounded-[8px] bg-[#3139fb]/10 hover:bg-[#3139fb]/20 disabled:opacity-40 disabled:cursor-not-allowed text-[#3139fb] text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <span>✨</span>
             <span>Suggest Reply with AI</span>
@@ -460,6 +517,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <textarea
             rows={2}
             value={inputText}
+            disabled={(!isWindowOpen && !isInternalNote) || isSending}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -470,15 +528,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             placeholder={
               isInternalNote
                 ? 'Write a private note for your team (the customer will NOT see this)...'
+                : !isWindowOpen
+                ? '⏱️ Customer care window is closed (>24h). Click "Send Approved Template" above to message this customer.'
                 : `Type a message to ${conversation.contact.name} (Press Enter to send)...`
             }
-            className="flex-1 min-w-0 p-3 bg-[#f7f4e3] text-black border border-black/20 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff] rounded-[10px] text-xs md:text-sm outline-none resize-none placeholder-[#696969]"
+            className="flex-1 min-w-0 p-3 bg-[#f7f4e3] text-black border border-black/20 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff] rounded-[10px] text-xs md:text-sm outline-none resize-none placeholder-[#696969] disabled:opacity-60 disabled:cursor-not-allowed"
           />
 
           <button
             type="button"
             onClick={handleSend}
-            disabled={!inputText.trim() || isSending}
+            disabled={(!isWindowOpen && !isInternalNote) || !inputText.trim() || isSending}
             className="h-[58px] px-5 rounded-[14px] bg-black hover:bg-[#000354] text-[#fffcec] font-bold text-xs md:text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center gap-2 cursor-pointer shadow-xs"
           >
             <span>

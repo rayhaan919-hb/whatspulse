@@ -121,6 +121,8 @@ export default function WhatsPulseApp() {
           senderId: currentMember.id,
           senderName: currentMember.fullName,
           conversationId: selectedConversation.id,
+          lastInboundAt: selectedConversation.lastInboundAt,
+          fepExpiresAt: selectedConversation.fepExpiresAt,
         }),
       });
 
@@ -141,6 +143,23 @@ export default function WhatsPulseApp() {
             )
           );
         }
+      } else if (!json.success && !data.isInternalNote) {
+        // Render failed message bubble with error code and retry action
+        const failedMsg: Message = {
+          id: `msg_failed_${Date.now()}`,
+          conversationId: selectedConversation.id,
+          workspaceId: workspace.id,
+          senderType: 'agent',
+          senderId: currentMember.id,
+          senderName: currentMember.fullName,
+          messageType: 'text',
+          content: data.content,
+          status: 'failed',
+          errorCode: json.errorCode || 131047,
+          errorDetails: json.error || 'Care window closed or send rejected',
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, failedMsg]);
       }
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -259,6 +278,10 @@ export default function WhatsPulseApp() {
           unreadCount: 1,
           lastMessagePreview: textBody,
           lastMessageAt: new Date().toISOString(),
+          lastInboundAt: new Date().toISOString(),
+          fepExpiresAt: (waMsg as any).referral
+            ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+            : undefined,
           tags: ['New Lead'],
         };
         targetConv = newConv;
@@ -274,6 +297,10 @@ export default function WhatsPulseApp() {
                   unreadCount: c.id === selectedConversationId ? 0 : c.unreadCount + 1,
                   lastMessagePreview: textBody,
                   lastMessageAt: new Date().toISOString(),
+                  lastInboundAt: new Date().toISOString(),
+                  fepExpiresAt: (waMsg as any).referral
+                    ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+                    : c.fepExpiresAt,
                   status: c.status === 'resolved' ? 'open' : c.status,
                 }
               : c

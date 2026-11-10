@@ -38,6 +38,8 @@ export interface WABAConfig {
   isActive: boolean;
 }
 
+export type OptStatus = 'opted_in' | 'opted_out' | 'unknown';
+
 export interface Contact {
   id: string;
   workspaceId: string;
@@ -47,6 +49,7 @@ export interface Contact {
   avatarUrl?: string;
   tags: string[];
   customAttributes: Record<string, string>;
+  optStatus?: OptStatus;
   isBlocked?: boolean;
   lastInteractionAt: string;
 }
@@ -118,7 +121,41 @@ export interface Conversation {
   unreadCount: number;
   lastMessagePreview: string;
   lastMessageAt: string;
+  lastInboundAt?: string;
+  fepExpiresAt?: string;
   tags: string[];
+}
+
+export interface OutboundJob {
+  id: string;
+  workspaceId: string;
+  campaignId?: string;
+  jobType: 'single' | 'broadcast';
+  status: 'queued' | 'running' | 'completed' | 'paused' | 'failed';
+  totalCount: number;
+  processedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  batchSize: number;
+  rateLimitPerSecond: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignRecipient {
+  id: string;
+  jobId: string;
+  contactId?: string;
+  phoneNumber: string;
+  optStatus?: OptStatus;
+  status: 'pending' | 'processing' | 'sent' | 'skipped' | 'failed';
+  waMessageId?: string;
+  errorCode?: number;
+  errorMessage?: string;
+  retryCount: number;
+  nextRetryAt?: string;
+  sentAt?: string;
+  createdAt: string;
 }
 
 export interface MessageTemplate {

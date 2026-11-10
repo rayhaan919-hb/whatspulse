@@ -171,6 +171,7 @@ export const DEMO_CONVERSATIONS: Conversation[] = [
     unreadCount: 1,
     lastMessagePreview: 'Can you confirm if our dedicated account manager has verified the contract extension?',
     lastMessageAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+    lastInboundAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
     tags: ['VIP Client', 'Enterprise'],
   },
   {
@@ -185,6 +186,7 @@ export const DEMO_CONVERSATIONS: Conversation[] = [
     unreadCount: 0,
     lastMessagePreview: 'Here is the quotation document for 500 units. Please let us know if you need modifications.',
     lastMessageAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+    lastInboundAt: new Date(Date.now() - 28 * 60 * 60 * 1000).toISOString(), // >24h: Care Window Closed (Template Only)
     tags: ['Lead - High Intent'],
   },
 ];

@@ -1,8 +1,12 @@
 // Outbound WhatsApp Message Dispatch Endpoint
 // Path: /api/messages/send
+// Phase 1B: Server-Side 24-Hour Care Window Enforcement & Meta Error Mapping
+// Documentation: https://developers.facebook.com/documentation/business-messaging/whatsapp/llms.txt
 
 import { NextRequest, NextResponse } from 'next/server';
 import { WhatsAppClient } from '@/lib/whatsapp/client';
+import { CareWindowService } from '@/lib/whatsapp/care-window';
+import { MetaErrorMapper } from '@/lib/whatsapp/errors';
 import { MessageType } from '@/types/crm';
 
 export async function POST(request: NextRequest) {
@@ -19,6 +23,8 @@ export async function POST(request: NextRequest) {
       senderId,
       senderName = 'Agent',
       conversationId,
+      lastInboundAt,
+      fepExpiresAt,
     } = body;
 
     if (!to && !isInternalNote) {
@@ -29,7 +35,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message content or template is required' }, { status: 400 });
     }
 
-    // 1. If internal note, do not dispatch to WhatsApp
+    // 1. If internal note, do not dispatch to WhatsApp or check customer care window
     if (isInternalNote) {
       const internalMsg = {
         id: `msg_note_${Date.now()}`,
@@ -46,16 +52,56 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: internalMsg });
     }
 
-    // 2. Dispatch to Meta WhatsApp Cloud API
+    // 2. Server-Side 24-Hour Customer Care Window Enforcement
+    // Never trust client: validate whether freeform messages are permitted
+    const isTemplate = Boolean(templateName);
+    const windowCheck = CareWindowService.validateOutboundSend({
+      isTemplate,
+      lastInboundAt,
+      fepExpiresAt,
+    });
+
+    if (!windowCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: windowCheck.reason,
+          code: windowCheck.code,
+          errorCode: windowCheck.errorCode,
+          actionRequired: 'SWITCH_TO_TEMPLATE',
+        },
+        { status: 400 }
+      );
+    }
+
+    // 3. Dispatch to Meta WhatsApp Cloud API
     const waClient = new WhatsAppClient();
     let metaResponse;
 
-    if (interactiveButtons && interactiveButtons.length > 0) {
-      metaResponse = await waClient.sendInteractiveButtons(to, content, interactiveButtons);
-    } else if (templateName) {
-      metaResponse = await waClient.sendTemplateMessage(to, templateName, templateLanguage || 'en_US');
-    } else {
-      metaResponse = await waClient.sendTextMessage(to, content);
+    try {
+      if (interactiveButtons && interactiveButtons.length > 0) {
+        metaResponse = await waClient.sendInteractiveButtons(to, content, interactiveButtons);
+      } else if (templateName) {
+        metaResponse = await waClient.sendTemplateMessage(to, templateName, templateLanguage || 'en_US');
+      } else {
+        metaResponse = await waClient.sendTextMessage(to, content);
+      }
+    } catch (metaErr: unknown) {
+      // Extract error code if present from Meta error message
+      const errStr = metaErr instanceof Error ? metaErr.message : String(metaErr);
+      const codeMatch = errStr.match(/"code":\s*(\d+)/) || errStr.match(/\((\d+)\)/);
+      const errorCode = codeMatch ? parseInt(codeMatch[1], 10) : undefined;
+      const mapped = MetaErrorMapper.mapError(errorCode, errStr);
+
+      return NextResponse.json(
+        {
+          error: mapped.userMessage,
+          code: mapped.category,
+          errorCode: mapped.code,
+          isRetryable: mapped.isRetryable,
+          actionRequired: mapped.actionRequired,
+        },
+        { status: 400 }
+      );
     }
 
     const waMessageId = metaResponse.messages?.[0]?.id || `wamid.HBgL${Date.now()}`;
