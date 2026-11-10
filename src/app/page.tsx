@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   CLEAN_WORKSPACE,
   CLEAN_MEMBERS,
@@ -13,6 +13,7 @@ import {
   DEMO_CONVERSATIONS,
   DEMO_MESSAGES,
   DEMO_CAMPAIGNS,
+  DEFAULT_CANNED_REPLIES,
 } from '@/lib/storage';
 import {
   Conversation,
@@ -21,8 +22,14 @@ import {
   WABAConfig,
   BroadcastCampaign,
   MetaWebhookPayload,
+  CannedReply,
+  AgentNotification,
 } from '@/types/crm';
 import { AISummaryResponse } from '@/lib/ai/copilot';
+import { MentionService } from '@/lib/inbox/mentions';
+import { SnoozeService } from '@/lib/inbox/snooze';
+import { AssignmentService } from '@/lib/inbox/assignment';
+import { BusinessHoursService } from '@/lib/inbox/business-hours';
 
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar, NavigationTab } from '@/components/layout/Sidebar';
@@ -48,6 +55,11 @@ export default function WhatsPulseApp() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [templates] = useState(DEFAULT_TEMPLATES);
   const [campaigns, setCampaigns] = useState<BroadcastCampaign[]>([]);
+  const [cannedReplies] = useState<CannedReply[]>(DEFAULT_CANNED_REPLIES);
+  const [notifications, setNotifications] = useState<AgentNotification[]>([]);
+
+  // Round-robin cycling index state reference
+  const rrStateRef = useRef<{ lastIndex: number }>({ lastIndex: -1 });
 
   const [activeTab, setActiveTab] = useState<NavigationTab>('inbox');
   const [selectedConversationId, setSelectedConversationId] = useState<string>('');
@@ -57,14 +69,6 @@ export default function WhatsPulseApp() {
 
   const [aiSummary, setAiSummary] = useState<AISummaryResponse | null>(null);
   const [isAiSummaryLoading, setIsAiSummaryLoading] = useState(false);
-
-  // Check saved preference on client mount
-  useEffect(() => {
-    const saved = localStorage.getItem('whatspulse_demo_mode');
-    if (saved === 'true') {
-      loadDemoData();
-    }
-  }, []);
 
   const clearDemoData = () => {
     setIsDemoMode(false);
@@ -95,6 +99,17 @@ export default function WhatsPulseApp() {
     localStorage.setItem('whatspulse_demo_mode', 'true');
   };
 
+  // Check saved preference on client mount
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('whatspulse_demo_mode') : null;
+    if (saved === 'true') {
+      const timer = setTimeout(() => {
+        loadDemoData();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   const currentMember = allMembers.find((m) => m.id === currentMemberId) || allMembers[0];
   const selectedConversation = conversations.find((c) => c.id === selectedConversationId);
   const currentMessages = messages.filter((m) => m.conversationId === selectedConversation?.id);
@@ -108,6 +123,23 @@ export default function WhatsPulseApp() {
     templateName?: string;
   }) => {
     if (!selectedConversation) return;
+
+    // Handle @mentions in internal notes
+    if (data.isInternalNote) {
+      const mentions = MentionService.extractMentions(data.content, allMembers);
+      if (mentions.length > 0) {
+        const newNotifs: AgentNotification[] = mentions.map((mentioned) =>
+          MentionService.createMentionNotification({
+            workspaceId: workspace.id,
+            conversationId: selectedConversation.id,
+            senderName: currentMember.fullName,
+            mentionedMember: mentioned,
+            noteContent: data.content,
+          })
+        );
+        setNotifications((prev) => [...newNotifs, ...prev]);
+      }
+    }
 
     try {
       const res = await fetch('/api/messages/send', {
@@ -214,6 +246,51 @@ export default function WhatsPulseApp() {
     );
   };
 
+  // Snooze management
+  const handleSnoozeConversation = (until: string | null) => {
+    if (!selectedConversation) return;
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === selectedConversation.id
+          ? {
+              ...c,
+              snoozedUntil: until,
+              status: until ? 'pending' : 'open',
+            }
+          : c
+      )
+    );
+  };
+
+  // Labels management
+  const handleAddLabel = (label: string) => {
+    if (!selectedConversation) return;
+    const existing = selectedConversation.labels || [];
+    if (existing.includes(label)) return;
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === selectedConversation.id
+          ? { ...c, labels: [...existing, label] }
+          : c
+      )
+    );
+  };
+
+  const handleRemoveLabel = (label: string) => {
+    if (!selectedConversation) return;
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === selectedConversation.id
+          ? { ...c, labels: (c.labels || []).filter((l) => l !== label) }
+          : c
+      )
+    );
+  };
+
+  const handleDismissNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
   // Trigger AI Summary
   const handleRequestAISummary = async () => {
     if (!selectedConversation) return;
@@ -258,6 +335,12 @@ export default function WhatsPulseApp() {
 
       let targetConv = conversations.find((c) => c.contact.phoneNumber === fromNumber);
 
+      // Free Entry Point referral check
+      const rawWaMsg = waMsg as unknown as { referral?: unknown };
+      const fepExpiresAt = rawWaMsg.referral
+        ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+        : undefined;
+
       if (!targetConv) {
         const newContact: Contact = {
           id: `cnt_${Date.now()}`,
@@ -268,46 +351,82 @@ export default function WhatsPulseApp() {
           customAttributes: { Source: 'WhatsApp' },
           lastInteractionAt: new Date().toISOString(),
         };
+
+        // Auto-assign new conversation if configured
+        let assignedAgent = undefined;
+        let assignedTo = undefined;
+        if (workspace.autoAssignmentMode && workspace.autoAssignmentMode !== 'disabled') {
+          const chosen =
+            workspace.autoAssignmentMode === 'least_loaded'
+              ? AssignmentService.assignLeastLoaded(allMembers, conversations)
+              : AssignmentService.assignRoundRobin(allMembers, rrStateRef.current);
+          if (chosen) {
+            assignedAgent = chosen;
+            assignedTo = chosen.id;
+          }
+        }
+
         const newConv: Conversation = {
           id: `conv_${Date.now()}`,
           workspaceId: workspace.id,
           contactId: newContact.id,
           contact: newContact,
+          assignedTo,
+          assignedAgent,
           status: 'open',
           priority: 'medium',
           unreadCount: 1,
           lastMessagePreview: textBody,
           lastMessageAt: new Date().toISOString(),
           lastInboundAt: new Date().toISOString(),
-          fepExpiresAt: (waMsg as any).referral
-            ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
-            : undefined,
+          fepExpiresAt,
           tags: ['New Lead'],
+          labels: [],
+          snoozedUntil: null,
         };
         targetConv = newConv;
         setContacts((prev) => [newContact, ...prev]);
         setConversations((prev) => [newConv, ...prev]);
         setSelectedConversationId(newConv.id);
       } else {
+        // Unsnooze and reopen conversation on inbound message
+        const reopened = SnoozeService.handleInboundMessage(targetConv);
+
+        // Auto-assignment if conversation is unassigned
+        let assignedTo = reopened.assignedTo;
+        let assignedAgent = reopened.assignedAgent;
+        if (!assignedTo && workspace.autoAssignmentMode && workspace.autoAssignmentMode !== 'disabled') {
+          const chosen =
+            workspace.autoAssignmentMode === 'least_loaded'
+              ? AssignmentService.assignLeastLoaded(allMembers, conversations)
+              : AssignmentService.assignRoundRobin(allMembers, rrStateRef.current);
+          if (chosen) {
+            assignedAgent = chosen;
+            assignedTo = chosen.id;
+          }
+        }
+
         setConversations((prev) =>
           prev.map((c) =>
             c.id === targetConv!.id
               ? {
                   ...c,
+                  ...reopened,
+                  assignedTo,
+                  assignedAgent,
                   unreadCount: c.id === selectedConversationId ? 0 : c.unreadCount + 1,
                   lastMessagePreview: textBody,
                   lastMessageAt: new Date().toISOString(),
                   lastInboundAt: new Date().toISOString(),
-                  fepExpiresAt: (waMsg as any).referral
-                    ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
-                    : c.fepExpiresAt,
-                  status: c.status === 'resolved' ? 'open' : c.status,
+                  fepExpiresAt: fepExpiresAt || c.fepExpiresAt,
+                  status: 'open',
                 }
               : c
           )
         );
       }
 
+      // Record customer message in chat timeline
       const newMsg: Message = {
         id: `msg_sim_${Date.now()}`,
         conversationId: targetConv.id,
@@ -315,7 +434,7 @@ export default function WhatsPulseApp() {
         waMessageId: waMsg.id,
         senderType: 'contact',
         senderName,
-        messageType: (waMsg.type as any) || 'text',
+        messageType: (waMsg.type as Message['messageType']) || 'text',
         content: textBody,
         interactiveData: waMsg.interactive?.button_reply
           ? {
@@ -327,6 +446,38 @@ export default function WhatsPulseApp() {
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, newMsg]);
+
+      // Check Business Hours & Dispatch After-Hours Auto-Reply if eligible
+      if (workspace.businessHours && workspace.businessHours.enabled) {
+        const shouldReply = BusinessHoursService.shouldSendAfterHoursAutoReply(
+          targetConv,
+          new Date(),
+          workspace.businessHours
+        );
+        if (shouldReply) {
+          const autoReplyMsg: Message = {
+            id: `msg_auto_${Date.now()}`,
+            conversationId: targetConv.id,
+            workspaceId: workspace.id,
+            senderType: 'bot',
+            senderName: 'Auto-Reply',
+            messageType: 'text',
+            content: workspace.businessHours.autoReplyMessage,
+            status: 'delivered',
+            createdAt: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, autoReplyMsg]);
+          // Mark lastAfterHoursReplyAt on conversation
+          const nowIso = new Date().toISOString();
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === targetConv!.id
+                ? { ...c, lastAfterHoursReplyAt: nowIso }
+                : c
+            )
+          );
+        }
+      }
     }
 
     // 2. If status receipt update
@@ -335,25 +486,25 @@ export default function WhatsPulseApp() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === st.id || m.waMessageId === st.id
-            ? { ...m, status: st.status as any }
+            ? { ...m, status: st.status as Message['status'] }
             : m
         )
       );
     }
   };
 
-  // Add Contact
   const handleAddContact = (contactData: Partial<Contact>) => {
     const newContact: Contact = {
       id: `cnt_${Date.now()}`,
       workspaceId: workspace.id,
-      phoneNumber: contactData.phoneNumber || '+10000000000',
-      name: contactData.name || 'New Customer',
+      phoneNumber: contactData.phoneNumber || '+1 555 000 0000',
+      name: contactData.name || 'New Contact',
       email: contactData.email,
-      tags: contactData.tags || [],
+      tags: contactData.tags || ['Lead'],
       customAttributes: contactData.customAttributes || {},
       lastInteractionAt: new Date().toISOString(),
     };
+    setContacts((prev) => [newContact, ...prev]);
 
     const newConv: Conversation = {
       id: `conv_${Date.now()}`,
@@ -366,14 +517,13 @@ export default function WhatsPulseApp() {
       lastMessagePreview: 'Conversation started',
       lastMessageAt: new Date().toISOString(),
       tags: newContact.tags,
+      labels: [],
+      snoozedUntil: null,
     };
-
-    setContacts((prev) => [newContact, ...prev]);
     setConversations((prev) => [newConv, ...prev]);
     setSelectedConversationId(newConv.id);
   };
 
-  // Open Chat from Contacts Table
   const handleOpenChatWithContact = (contactId: string) => {
     let conv = conversations.find((c) => c.contactId === contactId);
     if (!conv) {
@@ -390,6 +540,8 @@ export default function WhatsPulseApp() {
           lastMessagePreview: 'Conversation started',
           lastMessageAt: new Date().toISOString(),
           tags: contact.tags,
+          labels: [],
+          snoozedUntil: null,
         };
         setConversations((prev) => [conv!, ...prev]);
       }
@@ -400,18 +552,15 @@ export default function WhatsPulseApp() {
     }
   };
 
-  // Create Broadcast Campaign
   const handleCreateCampaign = (data: {
     name: string;
     templateId: string;
     targetTags: string[];
   }) => {
     const template = templates.find((t) => t.id === data.templateId);
-    const matchingContacts = contacts.filter((c) =>
+    const recipientCount = contacts.filter((c) =>
       c.tags.some((t) => data.targetTags.includes(t))
-    );
-
-    const recipientCount = matchingContacts.length > 0 ? matchingContacts.length : 1;
+    ).length;
 
     const newCampaign: BroadcastCampaign = {
       id: `camp_${Date.now()}`,
@@ -446,6 +595,8 @@ export default function WhatsPulseApp() {
         onClearDemoData={clearDemoData}
         onLoadDemoData={loadDemoData}
         onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+        notifications={notifications}
+        onDismissNotification={handleDismissNotification}
       />
 
       {/* Main Workspace Area */}
@@ -484,12 +635,16 @@ export default function WhatsPulseApp() {
                 currentMember={currentMember}
                 allMembers={allMembers}
                 templates={templates}
+                cannedReplies={cannedReplies}
                 onSendMessage={handleSendMessage}
                 onUpdateStatus={handleUpdateStatus}
                 onAssignAgent={handleAssignAgent}
                 onToggleDrawer={() => setIsDrawerOpen(!isDrawerOpen)}
                 isDrawerOpen={isDrawerOpen}
                 onRequestAISummary={handleRequestAISummary}
+                onSnooze={handleSnoozeConversation}
+                onAddLabel={handleAddLabel}
+                onRemoveLabel={handleRemoveLabel}
               />
             ) : (
               <div className="flex-1 min-w-0 overflow-y-auto flex flex-col items-center justify-center p-6 md:p-10 bg-[#fffcec] select-none">
@@ -513,7 +668,7 @@ export default function WhatsPulseApp() {
                   <div className="grid grid-cols-1 gap-3">
                     <button
                       onClick={() => setActiveTab('simulator')}
-                      className="text-left p-4 rounded-[12px] bg-[#f7f4e3] hover:bg-[#fffcec] border border-black/15 hover:border-black transition-all flex items-center justify-between gap-4 group"
+                      className="text-left p-4 rounded-[12px] bg-[#f7f4e3] hover:bg-[#fffcec] border border-black/15 hover:border-black transition-all flex items-center justify-between gap-4 group cursor-pointer"
                     >
                       <div className="flex items-start gap-3.5">
                         <span className="w-8 h-8 rounded-lg bg-black text-[#fffcec] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
@@ -535,7 +690,7 @@ export default function WhatsPulseApp() {
 
                     <button
                       onClick={loadDemoData}
-                      className="text-left p-4 rounded-[12px] bg-[#f7f4e3] hover:bg-[#fffcec] border border-black/15 hover:border-black transition-all flex items-center justify-between gap-4 group"
+                      className="text-left p-4 rounded-[12px] bg-[#f7f4e3] hover:bg-[#fffcec] border border-black/15 hover:border-black transition-all flex items-center justify-between gap-4 group cursor-pointer"
                     >
                       <div className="flex items-start gap-3.5">
                         <span className="w-8 h-8 rounded-lg bg-[#3139fb] text-[#fffcec] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
@@ -557,7 +712,7 @@ export default function WhatsPulseApp() {
 
                     <button
                       onClick={() => setActiveTab('settings')}
-                      className="text-left p-4 rounded-[12px] bg-[#f7f4e3] hover:bg-[#fffcec] border border-black/15 hover:border-black transition-all flex items-center justify-between gap-4 group"
+                      className="text-left p-4 rounded-[12px] bg-[#f7f4e3] hover:bg-[#fffcec] border border-black/15 hover:border-black transition-all flex items-center justify-between gap-4 group cursor-pointer"
                     >
                       <div className="flex items-start gap-3.5">
                         <span className="w-8 h-8 rounded-lg bg-black/10 text-black font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
@@ -635,7 +790,9 @@ export default function WhatsPulseApp() {
         {activeTab === 'settings' && (
           <WabaSettings
             config={wabaConfig}
+            workspace={workspace}
             onSaveConfig={(updated) => setWabaConfig((prev) => ({ ...prev, ...updated }))}
+            onSaveWorkspace={(updated) => setWorkspace((prev) => ({ ...prev, ...updated }))}
           />
         )}
       </div>

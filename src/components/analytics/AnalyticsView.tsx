@@ -22,7 +22,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const [rateCard, setRateCard] = useState<RateCard>(
     initialRateCard || PricingService.DEFAULT_RATE_CARD
   );
-  const [scopeConfig, setScopeConfig] = useState<ScopeConfig>({
+  const [scopeConfig] = useState<ScopeConfig>({
     freeServiceMessagesMonthly: 1000,
     allowanceScope: 'waba', // // VERIFY
   });
@@ -119,7 +119,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               }`}
             >
               <span>Meta Spend &amp; Rates</span>
-              <span className="text-[10px] font-mono text-[#3139fb] font-semibold">// VERIFY</span>
+              <span className="text-[10px] font-mono text-[#3139fb] font-semibold">{'// VERIFY'}</span>
             </button>
           </div>
         </div>
@@ -457,7 +457,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   </p>
                 </div>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#3139fb]/10 text-[#3139fb] font-bold">
-                  // VERIFY MV-01
+                  {'// VERIFY MV-01'}
                 </span>
               </div>
 

@@ -10,6 +10,7 @@ import {
   Message,
   MessageTemplate,
   BroadcastCampaign,
+  CannedReply,
 } from '@/types/crm';
 
 export const CLEAN_WORKSPACE: Workspace = {
@@ -18,7 +19,55 @@ export const CLEAN_WORKSPACE: Workspace = {
   slug: 'my-business',
   plan: 'pro',
   createdAt: new Date().toISOString(),
+  autoAssignmentMode: 'round_robin',
+  businessHours: {
+    enabled: true,
+    timezone: 'UTC',
+    schedule: {
+      1: { open: '09:00', close: '18:00' },
+      2: { open: '09:00', close: '18:00' },
+      3: { open: '09:00', close: '18:00' },
+      4: { open: '09:00', close: '18:00' },
+      5: { open: '09:00', close: '18:00' },
+    },
+    autoReplyMessage: 'Thank you for reaching out! We are currently outside of business hours. Our team will respond as soon as we open.',
+  },
 };
+
+export const DEFAULT_CANNED_REPLIES: CannedReply[] = [
+  {
+    id: 'cr_1',
+    workspaceId: 'ws_prod_01',
+    shortcut: 'refund',
+    title: 'Refund Policy & SLA',
+    content: 'Hi {{contact_name}}, our refund processing takes 3-5 business days. Your request is being handled by {{agent_name}}.',
+    category: 'support',
+  },
+  {
+    id: 'cr_2',
+    workspaceId: 'ws_prod_01',
+    shortcut: 'hours',
+    title: 'Business Hours',
+    content: 'Hi {{contact_name}}, our support desk is active Monday through Friday, 9:00 AM to 6:00 PM UTC.',
+    category: 'general',
+  },
+  {
+    id: 'cr_3',
+    workspaceId: 'ws_prod_01',
+    shortcut: 'escalate',
+    title: 'Senior Escalation',
+    content: 'Hello {{contact_name}}, I have escalated your inquiry to our senior technical lead. We will update you here shortly.',
+    category: 'support',
+  },
+  {
+    id: 'cr_4',
+    workspaceId: 'ws_prod_01',
+    shortcut: 'pricing',
+    title: 'Product Pricing & Plans',
+    content: 'Hi {{contact_name}}, our pricing plans start from $29/mo with full WhatsApp Business Cloud API access and CRM features.',
+    category: 'sales',
+  },
+];
 
 export const CLEAN_MEMBERS: WorkspaceMember[] = [
   {
@@ -82,6 +131,19 @@ export const DEMO_WORKSPACE: Workspace = {
   slug: 'pulsecommerce-demo',
   plan: 'agency',
   createdAt: '2026-01-15T08:00:00Z',
+  autoAssignmentMode: 'round_robin',
+  businessHours: {
+    enabled: true,
+    timezone: 'UTC',
+    schedule: {
+      1: { open: '09:00', close: '18:00' },
+      2: { open: '09:00', close: '18:00' },
+      3: { open: '09:00', close: '18:00' },
+      4: { open: '09:00', close: '18:00' },
+      5: { open: '09:00', close: '18:00' },
+    },
+    autoReplyMessage: 'Thank you for reaching out to PulseCommerce! We are currently outside business hours (Mon-Fri 9am-6pm UTC). Our team will respond promptly upon opening.',
+  },
 };
 
 export const DEMO_MEMBERS: WorkspaceMember[] = [
@@ -173,6 +235,8 @@ export const DEMO_CONVERSATIONS: Conversation[] = [
     lastMessageAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
     lastInboundAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
     tags: ['VIP Client', 'Enterprise'],
+    labels: ['VIP', 'Enterprise', 'Contract'],
+    snoozedUntil: null,
   },
   {
     id: 'conv_02',
@@ -188,6 +252,8 @@ export const DEMO_CONVERSATIONS: Conversation[] = [
     lastMessageAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
     lastInboundAt: new Date(Date.now() - 28 * 60 * 60 * 1000).toISOString(), // >24h: Care Window Closed (Template Only)
     tags: ['Lead - High Intent'],
+    labels: ['Sales', 'Quote'],
+    snoozedUntil: null,
   },
 ];
 

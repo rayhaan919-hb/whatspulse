@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Conversation, WorkspaceMember } from '@/types/crm';
+import { SnoozeService } from '@/lib/inbox/snooze';
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -11,7 +12,7 @@ interface ConversationListProps {
   onOpenSimulator?: () => void;
 }
 
-export type ConversationFilter = 'all' | 'mine' | 'unassigned' | 'resolved';
+export type ConversationFilter = 'all' | 'mine' | 'unassigned' | 'snoozed' | 'resolved';
 
 export const ConversationList: React.FC<ConversationListProps> = ({
   conversations,
@@ -22,23 +23,47 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 }) => {
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
 
-  const allCount = conversations.filter((c) => c.status !== 'resolved').length;
+  // Extract all unique labels present across conversations
+  const availableLabels = Array.from(
+    new Set(conversations.flatMap((c) => c.labels || []))
+  ).filter(Boolean);
+
+  const isConvSnoozed = (c: Conversation) => SnoozeService.isSnoozed(c);
+
+  const allCount = conversations.filter((c) => c.status !== 'resolved' && !isConvSnoozed(c)).length;
   const mineCount = conversations.filter(
-    (c) => c.assignedTo === currentMember.id && c.status !== 'resolved'
+    (c) => c.assignedTo === currentMember.id && c.status !== 'resolved' && !isConvSnoozed(c)
   ).length;
   const unassignedCount = conversations.filter(
-    (c) => !c.assignedTo && c.status !== 'resolved'
+    (c) => !c.assignedTo && c.status !== 'resolved' && !isConvSnoozed(c)
   ).length;
+  const snoozedCount = conversations.filter((c) => isConvSnoozed(c)).length;
   const resolvedCount = conversations.filter((c) => c.status === 'resolved').length;
 
   const filteredConversations = conversations.filter((conv) => {
-    if (filter === 'mine' && (conv.assignedTo !== currentMember.id || conv.status === 'resolved'))
-      return false;
-    if (filter === 'unassigned' && (conv.assignedTo || conv.status === 'resolved'))
-      return false;
-    if (filter === 'resolved' && conv.status !== 'resolved') return false;
-    if (filter === 'all' && conv.status === 'resolved') return false;
+    const isSnoozed = isConvSnoozed(conv);
+
+    if (filter === 'snoozed') {
+      if (!isSnoozed) return false;
+    } else if (filter === 'resolved') {
+      if (conv.status !== 'resolved') return false;
+    } else {
+      // In active tabs (all, mine, unassigned), hide snoozed conversations
+      if (isSnoozed) return false;
+      if (conv.status === 'resolved') return false;
+
+      if (filter === 'mine' && conv.assignedTo !== currentMember.id) return false;
+      if (filter === 'unassigned' && conv.assignedTo) return false;
+    }
+
+    // Filter by label if a label pill is selected
+    if (selectedLabel) {
+      if (!conv.labels || !conv.labels.includes(selectedLabel)) {
+        return false;
+      }
+    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -46,7 +71,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       const matchPhone = conv.contact.phoneNumber.toLowerCase().includes(q);
       const matchMsg = conv.lastMessagePreview.toLowerCase().includes(q);
       const matchTag = conv.tags.some((t) => t.toLowerCase().includes(q));
-      return matchName || matchPhone || matchMsg || matchTag;
+      const matchLabel = conv.labels?.some((l) => l.toLowerCase().includes(q));
+      return matchName || matchPhone || matchMsg || matchTag || matchLabel;
     }
 
     return true;
@@ -68,7 +94,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         <div className="relative">
           <input
             type="text"
-            placeholder="Search name, phone, or tag..."
+            placeholder="Search name, phone, label, tag..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-[#f7f4e3] text-black border border-black/15 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff] rounded-[8px] pl-3 pr-7 py-2 text-xs outline-none placeholder-[#696969]"
@@ -85,12 +111,13 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           )}
         </div>
 
-        {/* Neat 4-Tab Filter Row (No Overflow) */}
-        <div className="grid grid-cols-4 gap-1 bg-[#f7f4e3] p-1 rounded-[8px] border border-black/10">
+        {/* 5-Tab Filter Row (All, Mine, Free, Snoozed, Done) */}
+        <div className="grid grid-cols-5 gap-1 bg-[#f7f4e3] p-1 rounded-[8px] border border-black/10">
           {[
             { id: 'all', label: 'Open', count: allCount },
             { id: 'mine', label: 'Mine', count: mineCount },
             { id: 'unassigned', label: 'Free', count: unassignedCount },
+            { id: 'snoozed', label: 'Snooze', count: snoozedCount },
             { id: 'resolved', label: 'Done', count: resolvedCount },
           ].map((tab) => {
             const isActive = filter === tab.id;
@@ -99,7 +126,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 key={tab.id}
                 type="button"
                 onClick={() => setFilter(tab.id as ConversationFilter)}
-                className={`py-1.5 px-1 rounded-[6px] text-[11px] font-semibold transition-all flex flex-col items-center justify-center cursor-pointer ${
+                className={`py-1.5 px-0.5 rounded-[6px] text-[10.5px] font-semibold transition-all flex flex-col items-center justify-center cursor-pointer ${
                   isActive
                     ? 'bg-black text-[#fffcec] shadow-xs'
                     : 'text-[#696969] hover:text-black hover:bg-black/5'
@@ -107,7 +134,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               >
                 <span className="truncate max-w-full">{tab.label}</span>
                 <span
-                  className={`text-[10px] leading-none mt-0.5 font-mono ${
+                  className={`text-[9.5px] leading-none mt-0.5 font-mono ${
                     isActive ? 'text-[#96c4ff]' : 'text-[#696969]'
                   }`}
                 >
@@ -117,6 +144,43 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             );
           })}
         </div>
+
+        {/* Labels Filter Bar */}
+        {availableLabels.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+            <span className="text-[10px] uppercase font-bold text-[#696969] shrink-0 tracking-wider">
+              Labels:
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedLabel(null)}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 cursor-pointer transition-colors ${
+                selectedLabel === null
+                  ? 'bg-black text-[#fffcec]'
+                  : 'bg-black/5 text-[#696969] hover:text-black'
+              }`}
+            >
+              All
+            </button>
+            {availableLabels.map((lbl) => {
+              const isSelected = selectedLabel === lbl;
+              return (
+                <button
+                  key={lbl}
+                  type="button"
+                  onClick={() => setSelectedLabel(isSelected ? null : lbl)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 cursor-pointer transition-colors ${
+                    isSelected
+                      ? 'bg-[#3139fb] text-[#fffcec]'
+                      : 'bg-[#3139fb]/10 text-[#3139fb] hover:bg-[#3139fb]/20'
+                  }`}
+                >
+                  #{lbl}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Conversation Feed or Beginner-Friendly Empty State */}
@@ -128,15 +192,15 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             </div>
             <div className="space-y-1">
               <p className="text-xs font-bold text-black">
-                {searchQuery ? 'No matching chats' : 'No conversations here yet'}
+                {searchQuery || selectedLabel ? 'No matching chats' : 'No conversations here yet'}
               </p>
               <p className="text-[11px] text-[#696969] leading-relaxed">
-                {searchQuery
-                  ? 'Try searching for a different name or phone number.'
+                {searchQuery || selectedLabel
+                  ? 'Try clearing the search or label filters.'
                   : 'Send a quick test message or load sample data to see chats appear here.'}
               </p>
             </div>
-            {!searchQuery && onOpenSimulator && (
+            {!searchQuery && !selectedLabel && onOpenSimulator && (
               <button
                 type="button"
                 onClick={onOpenSimulator}
@@ -149,6 +213,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         ) : (
           filteredConversations.map((conv) => {
             const isSelected = selectedConversationId === conv.id;
+            const isSnoozed = isConvSnoozed(conv);
+
             return (
               <div
                 key={conv.id}
@@ -191,9 +257,26 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                     </span>
                   </div>
 
-                  <p className="text-xs text-[#696969] truncate mb-2">
+                  <p className="text-xs text-[#696969] truncate mb-1.5">
                     {conv.lastMessagePreview}
                   </p>
+
+                  {/* Labels and Snooze Badges */}
+                  <div className="flex items-center gap-1 flex-wrap mb-1.5">
+                    {isSnoozed && (
+                      <span className="px-1.5 py-0.5 text-[9.5px] font-bold rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                        ⏰ Snoozed
+                      </span>
+                    )}
+                    {conv.labels?.map((lbl, idx) => (
+                      <span
+                        key={idx}
+                        className="px-1.5 py-0.5 text-[9.5px] font-semibold rounded bg-[#3139fb]/10 text-[#3139fb] border border-[#3139fb]/15 truncate max-w-[80px]"
+                      >
+                        #{lbl}
+                      </span>
+                    ))}
+                  </div>
 
                   <div className="flex items-center justify-between gap-2">
                     {/* Tags */}

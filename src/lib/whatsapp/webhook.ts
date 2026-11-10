@@ -9,7 +9,6 @@ import type {
   MessageStatus,
   PendingStatusRecord,
   TenantRoutingConfig,
-  MessageTemplate,
 } from '../../types/crm';
 
 export interface ParsedIncomingMessage {
@@ -228,7 +227,7 @@ export class WebhookProcessor {
       waMessageId: msg.messageId,
       senderType: 'contact',
       senderName: msg.name,
-      messageType: (msg.type as any) || 'text',
+      messageType: (msg.type as Message['messageType']) || 'text',
       content: msg.body,
       mediaUrl: msg.mediaUrl || (msg.mediaId ? `/api/media/download?mediaId=${msg.mediaId}` : undefined),
       mediaType: msg.mimeType,
@@ -341,7 +340,18 @@ export class WebhookProcessor {
             let mediaId: string | undefined;
             let mimeType: string | undefined;
 
-            const msgObj = msg as Record<string, any>;
+            interface MetaMediaItem {
+              id?: string;
+              mime_type?: string;
+              filename?: string;
+            }
+
+            const rawMsg = msg as unknown as {
+              image?: MetaMediaItem;
+              video?: MetaMediaItem;
+              audio?: MetaMediaItem;
+              document?: MetaMediaItem;
+            };
 
             if (msg.type === 'text' && msg.text) {
               bodyText = msg.text.body;
@@ -355,22 +365,22 @@ export class WebhookProcessor {
               }
             } else if (msg.type === 'button' && msg.button) {
               bodyText = msg.button.text;
-            } else if (msg.type === 'image' && msgObj.image) {
+            } else if (msg.type === 'image' && rawMsg.image) {
               bodyText = '📷 [Photo Attached]';
-              mediaId = msgObj.image.id;
-              mimeType = msgObj.image.mime_type || 'image/jpeg';
-            } else if (msg.type === 'video' && msgObj.video) {
+              mediaId = rawMsg.image.id;
+              mimeType = rawMsg.image.mime_type || 'image/jpeg';
+            } else if (msg.type === 'video' && rawMsg.video) {
               bodyText = '🎥 [Video Attached]';
-              mediaId = msgObj.video.id;
-              mimeType = msgObj.video.mime_type || 'video/mp4';
-            } else if (msg.type === 'audio' && msgObj.audio) {
+              mediaId = rawMsg.video.id;
+              mimeType = rawMsg.video.mime_type || 'video/mp4';
+            } else if (msg.type === 'audio' && rawMsg.audio) {
               bodyText = '🎵 [Audio Attached]';
-              mediaId = msgObj.audio.id;
-              mimeType = msgObj.audio.mime_type || 'audio/ogg';
-            } else if (msg.type === 'document' && msgObj.document) {
-              bodyText = msgObj.document.filename ? `📄 ${msgObj.document.filename}` : '📄 [Document Attached]';
-              mediaId = msgObj.document.id;
-              mimeType = msgObj.document.mime_type || 'application/pdf';
+              mediaId = rawMsg.audio.id;
+              mimeType = rawMsg.audio.mime_type || 'audio/ogg';
+            } else if (msg.type === 'document' && rawMsg.document) {
+              bodyText = rawMsg.document.filename ? `📄 ${rawMsg.document.filename}` : '📄 [Document Attached]';
+              mediaId = rawMsg.document.id;
+              mimeType = rawMsg.document.mime_type || 'application/pdf';
             } else {
               bodyText = `📎 [${msg.type.toUpperCase()}]`;
             }
@@ -392,15 +402,16 @@ export class WebhookProcessor {
         // 2. Process Status Receipts
         if (val.statuses) {
           for (const st of val.statuses) {
-            const stObj = st as Record<string, any>;
+            const stObj = st as Record<string, unknown>;
             let pricing: ParsedStatusUpdate['pricing'];
 
-            if (stObj.pricing) {
+            if (stObj.pricing && typeof stObj.pricing === 'object') {
+              const pr = stObj.pricing as Record<string, unknown>;
               pricing = {
-                billable: Boolean(stObj.pricing.billable),
-                pricingModel: stObj.pricing.pricing_model || stObj.pricing.pricingModel,
-                category: stObj.pricing.category,
-                type: stObj.pricing.type,
+                billable: Boolean(pr.billable),
+                pricingModel: (pr.pricing_model || pr.pricingModel) as string | undefined,
+                category: (pr.category as string) || 'service',
+                type: pr.type as string | undefined,
               };
             }
 
@@ -417,22 +428,22 @@ export class WebhookProcessor {
 
         // 3. Process Template Lifecycle Updates (MV-03)
         // VERIFY: Meta field names for template status & category/quality updates
-        const valObj = val as Record<string, any>;
-        const changeField = (change as Record<string, any>).field;
+        const valObj = val as Record<string, unknown>;
+        const changeField = (change as Record<string, unknown>).field;
         if (
           changeField === 'message_template_status_update' ||
           changeField === 'message_template_quality_update' ||
           (valObj.event && !valObj.current_limit)
         ) {
           templateUpdates.push({
-            event: valObj.event || 'STATUS_UPDATE',
-            messageTemplateId: valObj.message_template_id,
-            messageTemplateName: valObj.message_template_name,
-            messageTemplateLanguage: valObj.message_template_language,
-            reason: valObj.reason,
-            previousCategory: valObj.previous_category, // VERIFY
-            newCategory: valObj.new_category, // VERIFY
-            qualityRating: valObj.quality_score?.score || valObj.quality_rating,
+            event: (valObj.event as string) || 'STATUS_UPDATE',
+            messageTemplateId: valObj.message_template_id as string | undefined,
+            messageTemplateName: valObj.message_template_name as string | undefined,
+            messageTemplateLanguage: valObj.message_template_language as string | undefined,
+            reason: valObj.reason as string | undefined,
+            previousCategory: valObj.previous_category as string | undefined, // VERIFY
+            newCategory: valObj.new_category as string | undefined, // VERIFY
+            qualityRating: ((valObj.quality_score as Record<string, unknown> | undefined)?.score || valObj.quality_rating) as string | undefined,
           });
         }
 
@@ -440,14 +451,14 @@ export class WebhookProcessor {
         if (
           changeField === 'phone_number_quality_update' ||
           valObj.current_limit ||
-          (valObj.event && valObj.event.startsWith('ON_'))
+          (typeof valObj.event === 'string' && valObj.event.startsWith('ON_'))
         ) {
           qualityUpdates.push({
-            displayPhoneNumber: valObj.display_phone_number,
-            phoneNumberId: valObj.phone_number_id,
-            event: valObj.event,
-            currentLimit: valObj.current_limit,
-            qualityRating: valObj.quality_score?.score || valObj.quality_rating,
+            displayPhoneNumber: valObj.display_phone_number as string | undefined,
+            phoneNumberId: valObj.phone_number_id as string | undefined,
+            event: valObj.event as string | undefined,
+            currentLimit: valObj.current_limit as string | undefined,
+            qualityRating: ((valObj.quality_score as Record<string, unknown> | undefined)?.score || valObj.quality_rating) as string | undefined,
           });
         }
       }

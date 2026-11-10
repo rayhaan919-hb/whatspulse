@@ -1,19 +1,23 @@
 'use client';
 
 import React, { useState } from 'react';
-import { WABAConfig, InAppAlert } from '@/types/crm';
+import { WABAConfig, InAppAlert, Workspace, AutoAssignmentMode } from '@/types/crm';
 
 interface WabaSettingsProps {
   config: WABAConfig;
+  workspace?: Workspace;
   alerts?: InAppAlert[];
   onSaveConfig: (updated: Partial<WABAConfig>) => void;
+  onSaveWorkspace?: (updated: Partial<Workspace>) => void;
   onAcknowledgeAlert?: (alertId: string) => void;
 }
 
 export const WabaSettings: React.FC<WabaSettingsProps> = ({
   config,
+  workspace,
   alerts = [],
   onSaveConfig,
+  onSaveWorkspace,
   onAcknowledgeAlert,
 }) => {
   const [phoneNumberId, setPhoneNumberId] = useState(config.phoneNumberId);
@@ -22,10 +26,26 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
   const [accessToken, setAccessToken] = useState(config.accessToken);
   const [showAccessToken, setShowAccessToken] = useState(false);
   const [webhookVerifyToken, setWebhookVerifyToken] = useState(config.webhookVerifyToken);
-  const [qualityRating, setQualityRating] = useState(config.qualityRating || 'GREEN');
-  const [messagingLimit, setMessagingLimit] = useState(config.messagingLimit || 'TIER_10K');
+  const [qualityRating] = useState(config.qualityRating || 'GREEN');
+  const [messagingLimit] = useState(config.messagingLimit || 'TIER_10K');
   const [allowanceScope, setAllowanceScope] = useState(config.allowanceScope || 'waba');
   const [freeServiceMessages, setFreeServiceMessages] = useState(config.freeServiceMessagesMonthly || 1000);
+
+  // Inbox Automation & Business Hours State
+  const [autoAssignmentMode, setAutoAssignmentMode] = useState<AutoAssignmentMode>(
+    workspace?.autoAssignmentMode || 'round_robin'
+  );
+  const [businessHoursEnabled, setBusinessHoursEnabled] = useState(
+    workspace?.businessHours?.enabled ?? true
+  );
+  const [businessHoursTimezone, setBusinessHoursTimezone] = useState(
+    workspace?.businessHours?.timezone || 'UTC'
+  );
+  const [businessHoursReply, setBusinessHoursReply] = useState(
+    workspace?.businessHours?.autoReplyMessage ||
+      'Thank you for reaching out! We are currently outside of business hours. Our team will respond as soon as we open.'
+  );
+
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -52,195 +72,248 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
       allowanceScope,
       freeServiceMessagesMonthly: freeServiceMessages,
     });
+
+    if (onSaveWorkspace) {
+      onSaveWorkspace({
+        autoAssignmentMode,
+        businessHours: {
+          enabled: businessHoursEnabled,
+          timezone: businessHoursTimezone,
+          schedule: workspace?.businessHours?.schedule || {
+            1: { open: '09:00', close: '18:00' },
+            2: { open: '09:00', close: '18:00' },
+            3: { open: '09:00', close: '18:00' },
+            4: { open: '09:00', close: '18:00' },
+            5: { open: '09:00', close: '18:00' },
+          },
+          autoReplyMessage: businessHoursReply,
+        },
+      });
+    }
+
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
   };
 
   return (
-    <div className="flex-1 min-w-0 overflow-y-auto p-6 md:p-8 bg-[#fffcec] select-none">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
+    <div className="flex-1 overflow-y-auto bg-[#fffcec] p-4 md:p-8 select-text">
+      <div className="max-w-3xl mx-auto space-y-6">
         <div>
-          <div className="font-eyebrow text-[10px] text-[#3139fb] font-bold mb-1">
-            WHATSAPP SETUP GUIDE
-          </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-black tracking-[-1.2px]">
-            Connect Your WhatsApp Business Number
+          <h2 className="text-xl font-bold text-black tracking-tight">
+            WhatsApp Business API &amp; Automation Settings
           </h2>
-          <p className="text-sm text-[#696969] mt-1 max-w-2xl">
-            Follow these 2 simple steps to connect your official Meta WhatsApp Business account. No coding required.
+          <p className="text-xs text-[#696969] mt-1">
+            Configure Meta Cloud API credentials, auto-assignment rules, business operating schedules, and compliance allowances.
           </p>
         </div>
 
-        {/* Step 1: Copy Webhook URL to Meta */}
-        <div className="p-6 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-4">
-          <div className="flex items-center gap-2.5">
-            <span className="w-6 h-6 rounded-full bg-black text-[#fffcec] text-xs font-bold flex items-center justify-center">
-              1
-            </span>
-            <h3 className="font-bold text-sm text-black">
-              Copy Your Webhook Details Into Meta Developer Portal
+        <form onSubmit={handleSave} className="space-y-6">
+          {/* Section 1: Credentials */}
+          <div className="p-5 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-4">
+            <h3 className="text-sm font-bold text-black border-b border-black/10 pb-2">
+              Meta Cloud API Credentials
             </h3>
-          </div>
-          <p className="text-xs text-[#696969] leading-relaxed">
-            In your <strong>Meta App Dashboard &rarr; WhatsApp &rarr; Configuration</strong>, paste these two values so WhatsPulse can receive incoming messages in real time:
-          </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-            <div>
-              <label className="block text-xs font-bold text-black mb-1.5">
-                Callback URL
-              </label>
-              <div className="flex items-center gap-2 bg-[#fffcec] p-2 rounded-[8px] border border-black/20">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-black mb-1">
+                  Phone Number ID
+                </label>
                 <input
+                  type="text"
+                  placeholder="e.g. 109283746501928"
+                  value={phoneNumberId}
+                  onChange={(e) => setPhoneNumberId(e.target.value)}
+                  className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono outline-none focus:border-[#3139fb]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-black mb-1">
+                  WhatsApp Business Account (WABA) ID
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 981273645019283"
+                  value={wabaId}
+                  onChange={(e) => setWabaId(e.target.value)}
+                  className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono outline-none focus:border-[#3139fb]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-black mb-1">
+                Display Phone Number
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. +1 555 019 2834"
+                value={displayPhoneNumber}
+                onChange={(e) => setDisplayPhoneNumber(e.target.value)}
+                className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono outline-none focus:border-[#3139fb]"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-black">
+                  System User Permanent Access Token
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowAccessToken(!showAccessToken)}
+                  className="text-xs text-[#3139fb] hover:underline cursor-pointer"
+                >
+                  {showAccessToken ? 'Mask Token' : 'Reveal Token'}
+                </button>
+              </div>
+              <input
+                type={showAccessToken ? 'text' : 'password'}
+                placeholder="EAAG..."
+                value={accessToken}
+                onChange={(e) => setAccessToken(e.target.value)}
+                className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono outline-none focus:border-[#3139fb]"
+              />
+              <p className="text-[10px] text-[#696969] mt-1">
+                🔒 Access tokens are encrypted at rest with AES-256-GCM. Never logged or exposed to client-side queries.
+              </p>
+            </div>
+          </div>
+
+          {/* Section 2: Inbox Productivity & Business Hours */}
+          <div className="p-5 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-4">
+            <h3 className="text-sm font-bold text-black border-b border-black/10 pb-2">
+              Inbox Productivity &amp; Auto-Assignment
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-black mb-1">
+                  Conversational Auto-Assignment
+                </label>
+                <select
+                  value={autoAssignmentMode}
+                  onChange={(e) => setAutoAssignmentMode(e.target.value as AutoAssignmentMode)}
+                  className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-medium outline-none focus:border-[#3139fb]"
+                >
+                  <option value="round_robin">Round-Robin (Cycles online agents evenly)</option>
+                  <option value="least_loaded">Least-Loaded (Routes to agent with fewest open chats)</option>
+                  <option value="disabled">Disabled (Manual assignment only)</option>
+                </select>
+                <p className="text-[10px] text-[#696969] mt-1">
+                  Automatically assigns new incoming WhatsApp chats to available team members.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-black mb-1">
+                  Business Timezone
+                </label>
+                <select
+                  value={businessHoursTimezone}
+                  onChange={(e) => setBusinessHoursTimezone(e.target.value)}
+                  className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono outline-none focus:border-[#3139fb]"
+                >
+                  <option value="UTC">UTC (Universal Coordinated Time)</option>
+                  <option value="America/New_York">America/New_York (EST/EDT)</option>
+                  <option value="America/Chicago">America/Chicago (CST/CDT)</option>
+                  <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
+                  <option value="Europe/London">Europe/London (GMT/BST)</option>
+                  <option value="Europe/Paris">Europe/Paris (CET/CEST)</option>
+                  <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                  <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
+                </select>
+                <p className="text-[10px] text-[#696969] mt-1">
+                  Operating schedule runs Monday through Friday 09:00 - 18:00 in selected timezone.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="businessHoursEnabled"
+                  checked={businessHoursEnabled}
+                  onChange={(e) => setBusinessHoursEnabled(e.target.checked)}
+                  className="rounded border-black/20 text-[#3139fb] focus:ring-0 cursor-pointer"
+                />
+                <label htmlFor="businessHoursEnabled" className="text-xs font-bold text-black cursor-pointer">
+                  Enable automated after-hours response outside business hours
+                </label>
+              </div>
+              {businessHoursEnabled && (
+                <div className="space-y-1">
+                  <textarea
+                    rows={2}
+                    value={businessHoursReply}
+                    onChange={(e) => setBusinessHoursReply(e.target.value)}
+                    className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs outline-none focus:border-[#3139fb]"
+                    placeholder="Enter automated greeting for after-hours inquiries..."
+                  />
+                  <p className="text-[10px] text-[#3139fb] font-medium">
+                    🛡️ Rate &amp; Cost Safeguard: Dispatched at most ONCE per conversation per closed period to prevent billable loops.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 3: Webhook Endpoint Handshake */}
+          <div className="p-5 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-4">
+            <h3 className="text-sm font-bold text-black border-b border-black/10 pb-2">
+              Meta Webhook Configuration
+            </h3>
+
+            <div>
+              <label className="block text-xs font-bold text-black mb-1">
+                Callback URL (Copy into Meta App Dashboard)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
                   readOnly
                   value={callbackUrl}
-                  className="flex-1 text-xs font-mono bg-transparent text-black outline-none min-w-0"
+                  className="flex-1 p-2.5 rounded-[8px] border border-black/20 bg-black/5 text-xs font-mono text-[#696969] outline-none"
                 />
                 <button
                   type="button"
-                  onClick={() => handleCopy(callbackUrl, 'url')}
-                  className="px-3 py-1.5 text-xs font-bold bg-black text-[#fffcec] rounded-[6px] hover:bg-[#000354] shrink-0"
+                  onClick={() => handleCopy(callbackUrl, 'callback')}
+                  className="px-4 py-2.5 bg-black hover:bg-[#000354] text-[#fffcec] rounded-[8px] text-xs font-bold cursor-pointer transition-all"
                 >
-                  {copiedField === 'url' ? '✓ Copied' : 'Copy'}
+                  {copiedField === 'callback' ? '✓ Copied' : 'Copy'}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-black mb-1.5">
+              <label className="block text-xs font-bold text-black mb-1">
                 Verify Token
               </label>
-              <div className="flex items-center gap-2 bg-[#fffcec] p-2 rounded-[8px] border border-black/20">
+              <div className="flex gap-2">
                 <input
-                  readOnly
+                  type="text"
                   value={webhookVerifyToken}
-                  className="flex-1 text-xs font-mono bg-transparent text-black outline-none min-w-0"
+                  onChange={(e) => setWebhookVerifyToken(e.target.value)}
+                  className="flex-1 p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono outline-none focus:border-[#3139fb]"
                 />
                 <button
                   type="button"
                   onClick={() => handleCopy(webhookVerifyToken, 'token')}
-                  className="px-3 py-1.5 text-xs font-bold bg-black text-[#fffcec] rounded-[6px] hover:bg-[#000354] shrink-0"
+                  className="px-4 py-2.5 bg-black hover:bg-[#000354] text-[#fffcec] rounded-[8px] text-xs font-bold cursor-pointer transition-all"
                 >
                   {copiedField === 'token' ? '✓ Copied' : 'Copy'}
                 </button>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Step 2: Enter Your API Keys */}
-        <form
-          onSubmit={handleSave}
-          className="p-6 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-5"
-        >
-          <div className="flex items-center gap-2.5">
-            <span className="w-6 h-6 rounded-full bg-black text-[#fffcec] text-xs font-bold flex items-center justify-center">
-              2
-            </span>
-            <h3 className="font-bold text-sm text-black">
-              Enter Your WhatsApp Cloud API Keys
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-black mb-1">
-                Your WhatsApp Phone Number
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="+1 (555) 019-2834"
-                value={displayPhoneNumber}
-                onChange={(e) => setDisplayPhoneNumber(e.target.value)}
-                className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono focus:border-[#3139fb] outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-black mb-1">
-                Phone Number ID
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. 10592837465"
-                value={phoneNumberId}
-                onChange={(e) => setPhoneNumberId(e.target.value)}
-                className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono focus:border-[#3139fb] outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-black mb-1">
-                WhatsApp Business Account (WABA) ID
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. 99887766554"
-                value={wabaId}
-                onChange={(e) => setWabaId(e.target.value)}
-                className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono focus:border-[#3139fb] outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-black mb-1">
-                Webhook Verify Token
-              </label>
-              <input
-                type="text"
-                required
-                value={webhookVerifyToken}
-                onChange={(e) => setWebhookVerifyToken(e.target.value)}
-                className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono focus:border-[#3139fb] outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-bold text-black flex items-center gap-1.5">
-                <span>Permanent Access Token</span>
-                <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-[4px] bg-[#3139fb]/10 text-[#3139fb]">
-                  🔒 AES-256-GCM Encrypted
-                </span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowAccessToken(!showAccessToken)}
-                className="text-[11px] font-bold text-[#3139fb] hover:underline"
-              >
-                {showAccessToken ? 'Hide Token' : 'Reveal Token'}
-              </button>
-            </div>
-            <div className="relative">
-              <input
-                type={showAccessToken ? 'text' : 'password'}
-                required
-                placeholder="EAAGm0PX4ZCpsBA..."
-                value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
-                className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono focus:border-[#3139fb] outline-none pr-20"
-              />
-              {!showAccessToken && accessToken && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[#696969] bg-[#f7f4e3] px-1.5 py-0.5 rounded pointer-events-none">
-                  ••••{accessToken.slice(-4)}
-                </div>
-              )}
-            </div>
-            <p className="text-[11px] text-[#696969] mt-1">
-              Protected by Supabase Service-Role isolation. Never exposed to public or authenticated client queries.
-            </p>
-          </div>
-
-          {/* Step 3: Meta Account Health, Quality & Free Allowance */}
-          <div className="pt-4 border-t border-black/10 space-y-4">
-            <h4 className="text-xs font-bold text-black uppercase tracking-wider">
+          {/* Section 4: Quality, Limits & Allowance */}
+          <div className="p-5 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-4">
+            <h3 className="text-sm font-bold text-black border-b border-black/10 pb-2">
               Health, Messaging Limits &amp; Billing Allowance
-            </h4>
+            </h3>
 
             {/* Quality Alerts Banner */}
             {alerts.filter((a) => !a.acknowledged).length > 0 && (
@@ -327,12 +400,12 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
               <div className="p-3.5 rounded-[8px] bg-[#fffcec] border border-black/15 space-y-2">
                 <label className="block text-xs font-bold text-black">
                   <span>Free Allowance Scope</span>
-                  <span className="text-[9px] font-mono ml-1.5 text-[#3139fb]">// VERIFY</span>
+                  <span className="text-[9px] font-mono ml-1.5 text-[#3139fb]">{'// VERIFY'}</span>
                 </label>
                 <select
                   value={allowanceScope}
                   onChange={(e) => setAllowanceScope(e.target.value as 'waba' | 'phone_number')}
-                  className="w-full p-2 rounded-[6px] border border-black/20 bg-[#f7f4e3] text-xs font-mono outline-none"
+                  className="w-full p-2 rounded-[6px] border border-black/20 bg-[#fffcec] text-xs font-mono outline-none"
                 >
                   <option value="waba">Per WABA Portfolio (Shared across numbers)</option>
                   <option value="phone_number">Per Phone Number (Independent pool)</option>
@@ -346,7 +419,7 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
               <div className="p-3.5 rounded-[8px] bg-[#fffcec] border border-black/15 space-y-2">
                 <label className="block text-xs font-bold text-black">
                   <span>Monthly Free Service Messages</span>
-                  <span className="text-[9px] font-mono ml-1.5 text-[#3139fb]">// VERIFY</span>
+                  <span className="text-[9px] font-mono ml-1.5 text-[#3139fb]">{'// VERIFY'}</span>
                 </label>
                 <input
                   type="number"
@@ -354,7 +427,7 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
                   max="10000"
                   value={freeServiceMessages}
                   onChange={(e) => setFreeServiceMessages(parseInt(e.target.value, 10) || 0)}
-                  className="w-full p-2 rounded-[6px] border border-black/20 bg-[#f7f4e3] text-xs font-mono outline-none"
+                  className="w-full p-2 rounded-[6px] border border-black/20 bg-[#fffcec] text-xs font-mono outline-none"
                 />
                 <p className="text-[10px] text-[#696969]">
                   First 1,000 service customer replies each month are free of Meta fees.
@@ -373,9 +446,9 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
             )}
             <button
               type="submit"
-              className="px-6 py-2.5 bg-black hover:bg-[#000354] text-[#fffcec] font-bold text-xs rounded-[8px] shadow-xs transition-all"
+              className="px-6 py-2.5 bg-black hover:bg-[#000354] text-[#fffcec] font-bold text-xs rounded-[8px] shadow-xs transition-all cursor-pointer"
             >
-              Save WhatsApp Settings
+              Save Settings
             </button>
           </div>
         </form>

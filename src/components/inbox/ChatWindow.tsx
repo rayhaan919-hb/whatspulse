@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Conversation, Message, WorkspaceMember, MessageTemplate } from '@/types/crm';
+import { Conversation, Message, WorkspaceMember, MessageTemplate, CannedReply } from '@/types/crm';
 import { CareWindowService } from '@/lib/whatsapp/care-window';
 import { MetaErrorMapper } from '@/lib/whatsapp/errors';
+import { CannedReplyService } from '@/lib/inbox/canned-replies';
+import { SnoozeService } from '@/lib/inbox/snooze';
+import { DEFAULT_CANNED_REPLIES } from '@/lib/storage';
 
 interface ChatWindowProps {
   conversation: Conversation;
@@ -11,6 +14,7 @@ interface ChatWindowProps {
   currentMember: WorkspaceMember;
   allMembers: WorkspaceMember[];
   templates: MessageTemplate[];
+  cannedReplies?: CannedReply[];
   onSendMessage: (data: {
     content: string;
     isInternalNote: boolean;
@@ -21,22 +25,36 @@ interface ChatWindowProps {
   onToggleDrawer: () => void;
   isDrawerOpen: boolean;
   onRequestAISummary: () => void;
+  onSnooze?: (until: string | null) => void;
+  onAddLabel?: (label: string) => void;
+  onRemoveLabel?: (label: string) => void;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   conversation,
   messages,
+  currentMember,
+  allMembers,
   templates,
+  cannedReplies = DEFAULT_CANNED_REPLIES,
   onSendMessage,
   onUpdateStatus,
   onToggleDrawer,
   isDrawerOpen,
   onRequestAISummary,
+  onSnooze,
+  onAddLabel,
+  onRemoveLabel,
 }) => {
   const [inputText, setInputText] = useState('');
   const [isInternalNote, setIsInternalNote] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [showCannedReplies, setShowCannedReplies] = useState(false);
+  const [showSnoozeMenu, setShowSnoozeMenu] = useState(false);
+  const [showMentionMenu, setShowMentionMenu] = useState(false);
+  const [showLabelInput, setShowLabelInput] = useState(false);
+  const [newLabelText, setNewLabelText] = useState('');
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -47,6 +65,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     lastInboundAt: conversation.lastInboundAt,
     fepExpiresAt: conversation.fepExpiresAt,
   }).allowed;
+
+  const isSnoozed = SnoozeService.isSnoozed(conversation);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -60,6 +80,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       if (e.key === 'Escape') {
         setShowTemplates(false);
         setShowAISuggestions(false);
+        setShowCannedReplies(false);
+        setShowSnoozeMenu(false);
+        setShowMentionMenu(false);
+        setShowLabelInput(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -77,6 +101,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setInputText('');
       setShowAISuggestions(false);
       setShowTemplates(false);
+      setShowCannedReplies(false);
+      setShowMentionMenu(false);
     } finally {
       setIsSending(false);
     }
@@ -96,8 +122,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
+  const handleSelectCannedReply = (reply: CannedReply) => {
+    const interpolated = CannedReplyService.interpolate(reply.content, {
+      contact_name: conversation.contact.name,
+      agent_name: currentMember.fullName,
+    });
+    setInputText(interpolated);
+    setShowCannedReplies(false);
+  };
+
+  const handleInsertMention = (member: WorkspaceMember) => {
+    const mentionTag = `@${member.fullName} `;
+    if (inputText.endsWith('@')) {
+      setInputText(inputText.slice(0, -1) + mentionTag);
+    } else {
+      setInputText(inputText + (inputText.endsWith(' ') || !inputText ? '' : ' ') + mentionTag);
+    }
+    setShowMentionMenu(false);
+  };
+
   const handleTriggerAI = async () => {
     setShowTemplates(false);
+    setShowCannedReplies(false);
     setShowAISuggestions(true);
     setIsAiLoading(true);
     try {
@@ -123,8 +169,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const toggleTemplates = () => {
     setShowAISuggestions(false);
+    setShowCannedReplies(false);
     setShowTemplates((prev) => !prev);
   };
+
+  const toggleCannedReplies = () => {
+    setShowAISuggestions(false);
+    setShowTemplates(false);
+    setShowCannedReplies((prev) => !prev);
+  };
+
+  // Matched canned replies based on composer input
+  const matchedCannedReplies = CannedReplyService.search(cannedReplies, inputText);
 
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 bg-[#fffcec] relative overflow-hidden select-text">
@@ -148,6 +204,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <span className="text-xs text-[#696969] font-mono hidden sm:inline shrink-0">
                 {conversation.contact.phoneNumber}
               </span>
+              {/* Labels Badges in Header */}
+              {conversation.labels?.map((lbl) => (
+                <span
+                  key={lbl}
+                  className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#3139fb]/10 text-[#3139fb] border border-[#3139fb]/20"
+                >
+                  #{lbl}
+                  {onRemoveLabel && (
+                    <button
+                      type="button"
+                      onClick={() => onRemoveLabel(lbl)}
+                      className="hover:text-red-500 font-bold ml-0.5 cursor-pointer"
+                      title={`Remove #${lbl}`}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </span>
+              ))}
             </div>
             <div className="flex items-center gap-1.5 text-[11px] truncate">
               <span
@@ -170,6 +245,140 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Snooze Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowSnoozeMenu((prev) => !prev)}
+              className={`px-2.5 py-1.5 rounded-[8px] border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                isSnoozed
+                  ? 'bg-amber-100 text-amber-900 border-amber-300 font-bold'
+                  : 'bg-[#f7f4e3] text-black border-black/20 hover:bg-[#efeccf]'
+              }`}
+              title="Snooze conversation"
+            >
+              <span>⏰</span>
+              <span className="hidden sm:inline">
+                {isSnoozed ? 'Snoozed' : 'Snooze'}
+              </span>
+            </button>
+
+            {showSnoozeMenu && (
+              <div className="absolute right-0 top-full mt-1.5 w-48 bg-[#fffcec] border border-black/15 rounded-[10px] shadow-lg py-1.5 z-40 text-xs">
+                <div className="px-3 py-1 font-bold text-[#696969] text-[10px] uppercase tracking-wider border-b border-black/10 mb-1">
+                  Snooze Until
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSnooze?.(SnoozeService.calculateSnoozePreset('1h'));
+                    setShowSnoozeMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#f7f4e3] flex items-center justify-between cursor-pointer"
+                >
+                  <span>1 Hour</span>
+                  <span className="text-[10px] text-[#696969] font-mono">+1h</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSnooze?.(SnoozeService.calculateSnoozePreset('4h'));
+                    setShowSnoozeMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#f7f4e3] flex items-center justify-between cursor-pointer"
+                >
+                  <span>4 Hours</span>
+                  <span className="text-[10px] text-[#696969] font-mono">+4h</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSnooze?.(SnoozeService.calculateSnoozePreset('tomorrow_9am'));
+                    setShowSnoozeMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#f7f4e3] flex items-center justify-between cursor-pointer"
+                >
+                  <span>Tomorrow 9 AM</span>
+                  <span className="text-[10px] text-[#696969] font-mono">09:00</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSnooze?.(SnoozeService.calculateSnoozePreset('next_week'));
+                    setShowSnoozeMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#f7f4e3] flex items-center justify-between cursor-pointer"
+                >
+                  <span>Next Week</span>
+                  <span className="text-[10px] text-[#696969] font-mono">+7d</span>
+                </button>
+                {isSnoozed && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSnooze?.(null);
+                      setShowSnoozeMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[#fb3a4d] font-bold hover:bg-[#fb3a4d]/10 border-t border-black/10 mt-1 cursor-pointer"
+                  >
+                    Unsnooze Conversation ➔
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Quick Label Trigger */}
+          {onAddLabel && (
+            <div className="relative hidden md:block">
+              {showLabelInput ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newLabelText.trim()) {
+                      onAddLabel(newLabelText.trim().replace(/^#/, ''));
+                      setNewLabelText('');
+                      setShowLabelInput(false);
+                    }
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="New label..."
+                    value={newLabelText}
+                    onChange={(e) => setNewLabelText(e.target.value)}
+                    className="w-24 px-2 py-1 text-xs bg-[#f7f4e3] border border-black/20 rounded-[6px] outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="px-2 py-1 bg-black text-[#fffcec] rounded-[6px] text-xs font-bold cursor-pointer"
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowLabelInput(false)}
+                    className="text-[#696969] text-xs font-bold px-1 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowLabelInput(true)}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-black/20 bg-[#f7f4e3] hover:bg-[#efeccf] text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  title="Add a label to this conversation"
+                >
+                  <span>🏷️</span>
+                  <span>+ Label</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Status Dropdown */}
           <select
             value={conversation.status}
@@ -214,12 +423,45 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       </div>
 
+      {/* Snoozed Banner Indicator */}
+      {isSnoozed && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-xs text-amber-900 shrink-0">
+          <div className="flex items-center gap-2">
+            <span>⏰</span>
+            <span>
+              This chat is snoozed until{' '}
+              <strong>
+                {new Date(conversation.snoozedUntil!).toLocaleString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </strong>
+              . Any incoming customer message will wake it automatically.
+            </span>
+          </div>
+          {onSnooze && (
+            <button
+              type="button"
+              onClick={() => onSnooze(null)}
+              className="text-xs font-bold text-amber-900 hover:underline cursor-pointer ml-3 shrink-0"
+            >
+              Unsnooze Now ➔
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Messages Timeline */}
       <div
         className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3.5"
         onClick={() => {
           if (showTemplates) setShowTemplates(false);
           if (showAISuggestions) setShowAISuggestions(false);
+          if (showCannedReplies) setShowCannedReplies(false);
+          if (showSnoozeMenu) setShowSnoozeMenu(false);
+          if (showMentionMenu) setShowMentionMenu(false);
         }}
       >
         {/* Date Pill */}
@@ -246,7 +488,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </span>
                       <span className="text-[#696969] font-medium">{msg.senderName}</span>
                     </div>
-                    <p className="text-xs text-black leading-relaxed break-words">
+                    <p className="text-xs text-black leading-relaxed break-words font-sans">
                       {msg.content}
                     </p>
                     <div className="text-[10px] text-[#696969] text-right mt-1">
@@ -373,6 +615,101 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Composer & Floating Popovers Wrapper */}
       <div className="relative shrink-0 bg-[#fffcec] border-t border-black/10 p-3.5 md:p-4">
+        {/* Floating Canned Quick Replies Panel */}
+        {showCannedReplies && (
+          <div className="absolute bottom-full left-0 right-0 z-30 bg-[#f7f4e3] border-t border-b border-black/20 p-4 max-h-72 overflow-y-auto shadow-lg">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-black">
+                <span>⚡</span>
+                <span>
+                  Quick Canned Replies (Type / in composer or click to insert)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCannedReplies(false)}
+                className="w-7 h-7 rounded-lg hover:bg-black/10 flex items-center justify-center text-black font-bold text-xs cursor-pointer"
+                title="Close canned replies (Esc)"
+              >
+                ✕
+              </button>
+            </div>
+            {matchedCannedReplies.length === 0 ? (
+              <div className="py-4 text-xs text-[#696969] text-center">
+                No canned replies matching &ldquo;{inputText}&rdquo;
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {matchedCannedReplies.map((reply) => (
+                  <button
+                    key={reply.id}
+                    type="button"
+                    onClick={() => handleSelectCannedReply(reply)}
+                    className="p-3 bg-[#fffcec] border border-black/15 hover:border-[#3139fb] rounded-[10px] text-left transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold text-black mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[#3139fb] bg-[#3139fb]/10 px-1.5 py-0.5 rounded">
+                          /{reply.shortcut}
+                        </span>
+                        <span>{reply.title}</span>
+                      </div>
+                      {reply.category && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/5 text-[#696969] uppercase font-mono">
+                          {reply.category}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[#696969] line-clamp-2">
+                      {reply.content}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Floating @Mention Team Selector Panel */}
+        {showMentionMenu && isInternalNote && (
+          <div className="absolute bottom-full left-0 right-0 z-30 bg-[#f7f4e3] border-t border-b border-black/20 p-3 max-h-48 overflow-y-auto shadow-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-black">
+                @ Mention a Team Member (they will receive an in-app alert)
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowMentionMenu(false)}
+                className="w-6 h-6 rounded hover:bg-black/10 flex items-center justify-center text-xs font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {allMembers.map((member) => (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => handleInsertMention(member)}
+                  className="flex items-center gap-2 p-2 rounded-[8px] bg-[#fffcec] border border-black/15 hover:border-[#3139fb] text-left cursor-pointer transition-all"
+                >
+                  <div className="w-6 h-6 rounded-full bg-black text-[#fffcec] text-[10px] font-bold flex items-center justify-center shrink-0">
+                    {member.fullName[0]}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-black truncate">
+                      {member.fullName}
+                    </p>
+                    <p className="text-[10px] text-[#696969] truncate capitalize">
+                      {member.role}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Floating AI Suggestions Panel */}
         {showAISuggestions && (
           <div className="absolute bottom-full left-0 right-0 z-30 bg-[#f7f4e3] border-t border-b border-black/20 p-4 shadow-lg">
@@ -460,7 +797,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <div className="inline-flex items-center rounded-[8px] bg-[#f7f4e3] p-0.5 border border-black/15">
               <button
                 type="button"
-                onClick={() => setIsInternalNote(false)}
+                onClick={() => {
+                  setIsInternalNote(false);
+                  setShowMentionMenu(false);
+                }}
                 className={`px-3 py-1 rounded-[6px] text-xs font-semibold transition-all cursor-pointer ${
                   !isInternalNote
                     ? 'bg-black text-[#fffcec]'
@@ -471,7 +811,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setIsInternalNote(true)}
+                onClick={() => {
+                  setIsInternalNote(true);
+                  setShowCannedReplies(false);
+                  setShowTemplates(false);
+                }}
                 className={`px-3 py-1 rounded-[6px] text-xs font-semibold transition-all cursor-pointer ${
                   isInternalNote
                     ? 'bg-black text-[#fffcec]'
@@ -481,6 +825,39 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 🔒 Private Team Note
               </button>
             </div>
+
+            {/* Canned Quick Reply Trigger */}
+            {!isInternalNote && (
+              <button
+                type="button"
+                onClick={toggleCannedReplies}
+                className={`px-3 py-1 rounded-[8px] border text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  showCannedReplies
+                    ? 'bg-black text-[#fffcec] border-black'
+                    : 'bg-[#fffcec] text-black border-black/20 hover:bg-[#f7f4e3]'
+                }`}
+                title="Quick Canned Replies (or type / in message)"
+              >
+                <span>⚡</span>
+                <span>Canned (/)</span>
+              </button>
+            )}
+
+            {/* Mention Teammate Trigger (Internal Note Mode) */}
+            {isInternalNote && (
+              <button
+                type="button"
+                onClick={() => setShowMentionMenu((prev) => !prev)}
+                className={`px-3 py-1 rounded-[8px] border text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  showMentionMenu
+                    ? 'bg-black text-[#fffcec] border-black'
+                    : 'bg-[#fffcec] text-black border-black/20 hover:bg-[#f7f4e3]'
+                }`}
+              >
+                <span>@</span>
+                <span>Mention Teammate</span>
+              </button>
+            )}
 
             {/* Template Picker Trigger */}
             {!isInternalNote && (
@@ -518,19 +895,35 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             rows={2}
             value={inputText}
             disabled={(!isWindowOpen && !isInternalNote) || isSending}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setInputText(val);
+              if (val.startsWith('/') && !isInternalNote) {
+                setShowCannedReplies(true);
+              } else if (!val.startsWith('/') && showCannedReplies) {
+                setShowCannedReplies(false);
+              }
+              if (isInternalNote && val.endsWith('@')) {
+                setShowMentionMenu(true);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
+                if (showCannedReplies && matchedCannedReplies.length > 0) {
+                  e.preventDefault();
+                  handleSelectCannedReply(matchedCannedReplies[0]);
+                  return;
+                }
                 e.preventDefault();
                 handleSend();
               }
             }}
             placeholder={
               isInternalNote
-                ? 'Write a private note for your team (the customer will NOT see this)...'
+                ? 'Write a private note (type @ to tag a teammate)...'
                 : !isWindowOpen
                 ? '⏱️ Customer care window is closed (>24h). Click "Send Approved Template" above to message this customer.'
-                : `Type a message to ${conversation.contact.name} (Press Enter to send)...`
+                : `Type a message (type / for canned replies, Enter to send)...`
             }
             className="flex-1 min-w-0 p-3 bg-[#f7f4e3] text-black border border-black/20 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff] rounded-[10px] text-xs md:text-sm outline-none resize-none placeholder-[#696969] disabled:opacity-60 disabled:cursor-not-allowed"
           />

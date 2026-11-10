@@ -60,7 +60,7 @@ export class OutboundQueue {
 
     let sentCount = 0;
     let skippedCount = 0;
-    let failedCount = 0;
+    const failedCount = 0;
 
     for (const idx of targetIndices) {
       const recipient = recipients[idx];
