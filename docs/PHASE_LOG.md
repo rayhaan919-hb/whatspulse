@@ -254,3 +254,49 @@ This log tracks all completed stops, architectural decisions, migration records,
 - **Skipped & Rationale:**
   - None.
 - **Status:** Complete / Ready for Review
+
+---
+
+## [STOP 4B] Phase 4B — Internationalization (i18n), Accessibility (a11y) & Commercial Copy Sanitization
+- **Date / Timestamp:** 2026-11-11T04:40:00+05:00
+- **Git Branch:** `phase-4b-i18n-a11y`
+- **Files Changed:**
+  - `src/lib/i18n/locales.ts` (Type definitions for `Locale`, `Direction`, `LocaleMetadata`, `LOCALES` registry, `DEFAULT_LOCALE`)
+  - `src/lib/i18n/translations/en.ts` (Externalized English translations for common, nav, inbox, chat, contact, settings, bulk, a11y)
+  - `src/lib/i18n/translations/ar.ts` (Externalized culturally-authentic Arabic translations with RTL directionality)
+  - `src/lib/i18n/i18n-service.ts` (Translation engine with fallback to English, dynamic interpolation `{{key}}`, language direction resolver, locale validators)
+  - `src/lib/i18n/context.tsx` (React 19 `I18nProvider`, `useI18n()` hook, `localStorage` persistence, automatic `document.documentElement` `dir` and `lang` synchronization)
+  - `src/lib/a11y/a11y-service.ts` (A11yService: WAI-ARIA modal dialog verification, accessible icon button label validation, WCAG 2.1 relative luminance contrast calculation)
+  - `docs/I18N_GUIDE.md` (Developer guide detailing CSS logical properties, RTL layout best practices, and the 3-step workflow for adding a new language)
+  - `src/app/globals.css` (Replaced Arc Browser references with warm editorial theme definitions, `.editorial-` utilities, `:focus-visible` high-contrast focus rings, `[dir="rtl"]` logical layout helpers)
+  - `README.md` (Sanitized claims: removed "Zero phone bans" and "Zero Ban Guarantee"; replaced with official Meta WhatsApp Cloud API compliance statement)
+  - `SETUP_GUIDE.md` (Sanitized claims: removed "zero phone number bans" and "Zero Ban Risk"; replaced with official Cloud API compliance)
+  - `src/app/layout.tsx` (Wrapped root layout with `<I18nProvider>`, updated page title and description)
+  - `src/components/layout/Navbar.tsx` (Language switcher button `🇺🇸 EN` / `🇸🇦 عربي`, `useI18n`, `aria-label` attributes on icon-only buttons and modal containers)
+  - `src/components/layout/Sidebar.tsx` (Logical CSS properties `border-e`, `text-start`, `useI18n`, ARIA tablist/tab semantics, accessible sidebar close button)
+  - `src/components/inbox/ConversationList.tsx` (Logical properties `border-e`, `border-s-4`, `ps-`, `pe-`, `start-`, `end-`, `useI18n`, ARIA semantics on modals and action buttons, keyboard shortcuts)
+  - `src/components/inbox/ChatWindow.tsx` (Logical CSS properties, `useI18n`, ARIA dialog attributes on template selector, accessible button labels on voice/media/templates/send)
+  - `src/components/inbox/ContactDrawer.tsx` (Updated with `role="dialog"`, `aria-modal="false"`, `aria-label`, logical `border-s`, `useI18n`, Escape key handler)
+  - `src/components/settings/WabaSettings.tsx` (Externalized strings with `useI18n`, ARIA dialog attributes on key generator and webhook modals, Escape key listener)
+  - `tsconfig.json` (Added `"allowImportingTsExtensions": true` for clean ESM TypeScript execution with Node `--experimental-strip-types`)
+  - `test-e2e.mjs` (Added 13 automated tests across Groups 33, 34, 35; total 114/114 tests passing)
+- **Migrations Added:**
+  - None required (UI, styling, client state, documentation, and externalized translation assets).
+- **Environment Variables Added:**
+  - None required.
+- **Tests Added & Results:**
+  - 13 new automated test assertions in `test-e2e.mjs` (114/114 passed, 100%):
+    - Group 33: i18n Translation & RTL Engine: English dictionary lookup, variable interpolation `{{count}}`, Arabic dictionary translation, fallback to English for missing keys, language direction resolution (`ar` -> `rtl`, `en` -> `ltr`), registry metadata
+    - Group 34: Accessibility (a11y) & Contrast Standards: WAI-ARIA dialog attributes validator (`role="dialog"`, `aria-modal`, `aria-label`), rejection of dialogs missing accessible labels, icon-only button label validator, WCAG AA contrast ratio validation of warm editorial primary ink (`#000000` on `#fffcec` -> ratio 20.4:1)
+    - Group 35: Copy Sanitization & Compliance Verification: zero occurrences of "Arc Browser" across docs/CSS, zero occurrences of "zero ban" / "zero-ban" claims, accurate Meta WhatsApp Cloud API compliance statement verified in documentation
+  - TypeScript strict: PASS (`tsc --noEmit` exited 0)
+  - ESLint: PASS (`eslint` exited 0, 0 errors, 0 warnings)
+  - Next.js Turbopack build: PASS (12/12 static & dynamic routes compiled cleanly)
+  - E2E Tests: 114/114 passed (100%)
+- **// VERIFY Items:**
+  - Confirmed: Under WCAG 2.1 AA, normal text requires a minimum contrast ratio of 4.5:1. The warm editorial palette (`#000000` on `#fffcec`) achieves 20.4:1, and `#696969` muted text on `#fffcec` achieves 5.3:1, both exceeding the standard.
+  - Confirmed: Commercial marketing copy strictly frames restriction prevention around official Meta Cloud API compliance, opt-in management, and quality rating monitors rather than unsubstantiated "zero ban" guarantees.
+- **Skipped & Rationale:**
+  - None.
+- **Status:** Complete / Ready for Review
+

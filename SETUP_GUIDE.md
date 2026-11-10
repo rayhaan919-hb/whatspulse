@@ -1,6 +1,6 @@
 # WhatsPulse CRM — Official Meta WhatsApp Cloud API Setup Guide
 
-This guide walks you through connecting your **Official WhatsApp Business Account (WABA)** with **WhatsPulse CRM**. Following these steps guarantees **100% compliance with Meta's policies and zero phone number bans**.
+This guide walks you through connecting your **Official WhatsApp Business Account (WABA)** with **WhatsPulse CRM**. Following these steps ensures complete compliance with Meta's developer policies using official Cloud API tooling to reduce restriction risks.
 
 ---
 
@@ -63,4 +63,4 @@ To initiate outbound conversations outside the 24-hour customer service window:
 
 ## 7. Understanding Meta Pricing & The Free Tier
 * **1,000 Free Service Conversations every month:** Meta provides 1,000 customer-initiated service conversations per month completely free of charge.
-* **Zero Ban Risk:** Unlike unofficial WhatsApp Web QR code scripts, the Official Cloud API has zero ban risk when sending within Meta's quality guidelines.
+* **Official API Architecture:** Unlike unofficial WhatsApp Web QR code scripts, WhatsPulse is built strictly on the official Meta WhatsApp Cloud API with opt-in tracking and quality monitoring tooling to minimize restriction risks.

@@ -1,15 +1,15 @@
 # ⚡ WhatsPulse CRM — Official Meta WhatsApp Cloud API SaaS & Multi-Agent Inbox
 
-> **The modern, high-converting WhatsApp CRM and Broadcast Suite built with Next.js 15, TypeScript, Tailwind CSS, and Supabase.**
-> 100% compliant with Meta WhatsApp Cloud API v20+. **Zero phone bans.**
+> **The modern, high-converting WhatsApp CRM and Broadcast Suite built with Next.js 16 (Turbopack), React 19, TypeScript, Tailwind CSS, and Supabase.**
+> Built strictly on the official Meta WhatsApp Cloud API (no unofficial QR-scan libraries), with opt-in and quality tooling to reduce restriction risk.
 
 ---
 
 ## 🚀 Key Features
 
-* **🛡️ 100% Official Meta Cloud API (Zero Ban Guarantee):**
-  * Direct integration with official Meta Developer APIs.
-  * No flaky QR code scraping, no Puppeteer browser instances, no WhatsApp Web disconnections.
+* **🛡️ Official Meta WhatsApp Cloud API Architecture:**
+  * Direct integration with official Meta Developer APIs (no unofficial QR-scan libraries, no Puppeteer browser instances, no WhatsApp Web disconnections).
+  * Built-in opt-in compliance ledger and quality monitoring tools to minimize restriction risks.
   * 1,000 free monthly service conversations included by Meta.
 
 * **💬 Live Multi-Agent Unified Team Inbox:**
