@@ -27,8 +27,13 @@ const { MediaStorageService } = await import('./src/lib/whatsapp/media.ts');
 const { PricingService } = await import('./src/lib/whatsapp/pricing.ts');
 const { ComplianceService } = await import('./src/lib/whatsapp/compliance.ts');
 const { QualityMonitoringService } = await import('./src/lib/whatsapp/quality.ts');
+const { CannedReplyService } = await import('./src/lib/inbox/canned-replies.ts');
+const { AssignmentService } = await import('./src/lib/inbox/assignment.ts');
+const { BusinessHoursService } = await import('./src/lib/inbox/business-hours.ts');
+const { SnoozeService } = await import('./src/lib/inbox/snooze.ts');
+const { MentionService } = await import('./src/lib/inbox/mentions.ts');
 
-console.log('🚀 Starting WhatsPulse CRM Phase 2 Automated Test Suite...\n');
+console.log('🚀 Starting WhatsPulse CRM Phase 3A Automated Test Suite...\n');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -557,7 +562,6 @@ assert(
 );
 
 // Simulate burst consumption
-let burstAllowed = true;
 for (let i = 0; i < 80; i++) {
   rateLimiter.consume();
 }
@@ -781,7 +785,7 @@ assert(
 );
 
 // 17.2 Enforce size limit (Reject image exceeding 16MB)
-const mockOversizedFetch = async (url) => {
+const mockOversizedFetch = async () => {
   return {
     ok: true,
     json: async () => ({
@@ -1155,14 +1159,212 @@ assert(
 );
 
 // ============================================================================
+// Group 24: Canned Replies Matching & Variable Interpolation
+// ============================================================================
+console.log('\n--- Test Group 24: Canned Replies Matching & Variable Interpolation ---');
+
+const sampleCanned = [
+  { id: 'cr_1', workspaceId: 'ws_prod_01', shortcut: 'refund', title: 'Refund Policy', content: 'Hi {{contact_name}}, our refund takes 3-5 business days. Best, {{agent_name}}.' },
+  { id: 'cr_2', workspaceId: 'ws_prod_01', shortcut: 'hours', title: 'Opening Hours', content: 'Hi {{contact_name}}, our team is available Mon-Fri 9am-6pm.' },
+];
+
+// 24.1 Search by slash command shortcut
+const matchedCanned = CannedReplyService.search(sampleCanned, '/ref');
+assert(
+  matchedCanned.length === 1 && matchedCanned[0].shortcut === 'refund',
+  'Canned reply successfully matched by slash command "/ref"'
+);
+
+// 24.2 Variable interpolation
+const interpolated = CannedReplyService.interpolate(matchedCanned[0].content, {
+  contact_name: 'Elena Rostova',
+  agent_name: 'Alex Rivera',
+});
+assert(
+  interpolated === 'Hi Elena Rostova, our refund takes 3-5 business days. Best, Alex Rivera.',
+  'Placeholders {{contact_name}} and {{agent_name}} accurately interpolated'
+);
+
+// ============================================================================
+// Group 25: Auto-Assignment Engine (Round-Robin & Least-Loaded with Availability)
+// ============================================================================
+console.log('\n--- Test Group 25: Auto-Assignment Engine & Availability ---');
+
+const agentList = [
+  { id: 'agent_1', fullName: 'Sarah', isOnline: true },
+  { id: 'agent_2', fullName: 'Alex', isOnline: false }, // OFFLINE
+  { id: 'agent_3', fullName: 'Elena', isOnline: true },
+];
+
+const openConvs = [
+  { id: 'c1', assignedTo: 'agent_1' },
+  { id: 'c2', assignedTo: 'agent_1' },
+  { id: 'c3', assignedTo: 'agent_3' },
+];
+
+// 25.1 Round-Robin mode: skips offline agent_2, cycles agent_1 -> agent_3 -> agent_1
+const rrState = { lastIndex: -1 };
+const assigned1 = AssignmentService.assignRoundRobin(agentList, rrState);
+const assigned2 = AssignmentService.assignRoundRobin(agentList, rrState);
+const assigned3 = AssignmentService.assignRoundRobin(agentList, rrState);
+assert(
+  assigned1?.id === 'agent_1' && assigned2?.id === 'agent_3' && assigned3?.id === 'agent_1',
+  'Round-robin auto-assignment cycles through online agents only, skipping offline agents'
+);
+
+// 25.2 Least-Loaded mode: agent_3 has 1 open chat, agent_1 has 2 open chats -> agent_3 gets the chat
+const leastLoaded = AssignmentService.assignLeastLoaded(agentList, openConvs);
+assert(
+  leastLoaded?.id === 'agent_3',
+  'Least-loaded auto-assignment selects the online agent with the fewest active conversations'
+);
+
+// 25.3 When all agents offline: returns null / unassigned
+const allOffline = agentList.map((a) => ({ ...a, isOnline: false }));
+assert(
+  AssignmentService.assignRoundRobin(allOffline, rrState) === null &&
+  AssignmentService.assignLeastLoaded(allOffline, openConvs) === null,
+  'Auto-assignment returns null safely when no agents are online'
+);
+
+// ============================================================================
+// Group 26: Business Hours & Duplicate Auto-Reply Suppression
+// ============================================================================
+console.log('\n--- Test Group 26: Business Hours & Duplicate Auto-Reply Suppression ---');
+
+const businessHoursConfig = {
+  enabled: true,
+  timezone: 'UTC',
+  schedule: {
+    // Mon-Fri 09:00 - 18:00 (1=Mon, 5=Fri)
+    1: { open: '09:00', close: '18:00' },
+    2: { open: '09:00', close: '18:00' },
+    3: { open: '09:00', close: '18:00' },
+    4: { open: '09:00', close: '18:00' },
+    5: { open: '09:00', close: '18:00' },
+  },
+  autoReplyMessage: 'Thank you for reaching out. We are currently closed.',
+};
+
+// 26.1 Check during open hours (Wednesday 14:00 UTC)
+const wednesdayOpenTime = new Date('2026-11-11T14:00:00Z');
+assert(
+  BusinessHoursService.isWithinBusinessHours(wednesdayOpenTime, businessHoursConfig) === true,
+  'BusinessHoursService confirms time is within open business hours'
+);
+
+// 26.2 Check during closed hours (Sunday 14:00 UTC)
+const sundayClosedTime = new Date('2026-11-15T14:00:00Z');
+assert(
+  BusinessHoursService.isWithinBusinessHours(sundayClosedTime, businessHoursConfig) === false,
+  'BusinessHoursService confirms Sunday is outside business hours'
+);
+
+// 26.3 Rate/cost safeguard: send auto-reply at most once per closed period per conversation
+const testConvClosed = {
+  id: 'conv_closed_01',
+  lastAfterHoursReplyAt: '2026-11-15T10:00:00Z', // Already sent once this Sunday closed period
+};
+
+const shouldSend1 = BusinessHoursService.shouldSendAfterHoursAutoReply(
+  testConvClosed,
+  sundayClosedTime,
+  businessHoursConfig
+);
+assert(
+  shouldSend1 === false,
+  'Auto-reply suppressed: already sent once during current closed period (preventing billable loops)'
+);
+
+// 26.4 Fresh conversation without prior after-hours reply -> permitted
+const testConvFresh = {
+  id: 'conv_closed_02',
+  lastAfterHoursReplyAt: undefined,
+};
+const shouldSend2 = BusinessHoursService.shouldSendAfterHoursAutoReply(
+  testConvFresh,
+  sundayClosedTime,
+  businessHoursConfig
+);
+assert(
+  shouldSend2 === true,
+  'First after-hours message in closed period triggers auto-reply'
+);
+
+// ============================================================================
+// Group 27: Conversation Snooze & Auto-Reopen on Inbound Message
+// ============================================================================
+console.log('\n--- Test Group 27: Conversation Snooze & Auto-Reopen ---');
+
+const futureSnooze = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+const pastSnooze = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+// 27.1 Active snooze check
+assert(
+  SnoozeService.isSnoozed({ snoozedUntil: futureSnooze }) === true,
+  'Conversation with future snoozedUntil is actively snoozed'
+);
+assert(
+  SnoozeService.isSnoozed({ snoozedUntil: pastSnooze }) === false,
+  'Conversation with past snoozedUntil is no longer snoozed (expired)'
+);
+
+// 27.2 Inbound message auto-reopens snoozed conversation
+const snoozedConv = {
+  id: 'conv_snoozed_01',
+  status: 'pending',
+  snoozedUntil: futureSnooze,
+};
+
+const reopenedConv = SnoozeService.handleInboundMessage(snoozedConv);
+assert(
+  reopenedConv.snoozedUntil === null && reopenedConv.status === 'open',
+  'Inbound message automatically unsnoozes conversation and resets status to open'
+);
+
+// ============================================================================
+// Group 28: Private Note @Mentions & Agent Notification Generation
+// ============================================================================
+console.log('\n--- Test Group 28: Private Note @Mentions & Agent Notifications ---');
+
+const allOrgMembers = [
+  { id: 'mem_sarah', fullName: 'Sarah Jenkins' },
+  { id: 'mem_alex', fullName: 'Alex Rivera' },
+];
+
+const noteWithMention = 'Hey @Alex Rivera, please take a look at the contract SLA for this client.';
+const extracted = MentionService.extractMentions(noteWithMention, allOrgMembers);
+
+assert(
+  extracted.length === 1 && extracted[0].id === 'mem_alex',
+  '@mention successfully parsed and mapped to member Alex Rivera'
+);
+
+// 28.2 Notification object generation
+const notification = MentionService.createMentionNotification({
+  workspaceId: 'ws_prod_01',
+  conversationId: 'conv_01',
+  senderName: 'Sarah Jenkins',
+  mentionedMember: extracted[0],
+  noteContent: noteWithMention,
+});
+
+assert(
+  notification.memberId === 'mem_alex' &&
+  notification.title.includes('Sarah Jenkins') &&
+  notification.isRead === false,
+  'In-app mention notification created with recipient, author, and preview'
+);
+
+// ============================================================================
 // Final Summary
 // ============================================================================
 console.log(`\n======================================================`);
 console.log(`Test Results: ${passedTests}/${totalTests} tests passed (${Math.round((passedTests / totalTests) * 100)}%)`);
 if (passedTests === totalTests) {
-  console.log(`Phase 2 Cost & Compliance Verification Completed Successfully! 🚀`);
+  console.log(`Phase 3A Core Inbox Productivity Verification Completed Successfully! 🚀`);
 } else {
-  console.error(`❌ Some tests failed in Phase 2 verification.`);
+  console.error(`❌ Some tests failed in Phase 3A verification.`);
   process.exitCode = 1;
 }
 console.log(`======================================================\n`);

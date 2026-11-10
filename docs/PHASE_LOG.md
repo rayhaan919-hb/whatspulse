@@ -161,3 +161,48 @@ This log tracks all completed stops, architectural decisions, migration records,
 - **Skipped & Rationale:**
   - None.
 - **Status:** Complete / Ready for Review
+
+---
+
+## [STOP 3A] Phase 3A — Inbox Productivity: Canned Replies, Auto-Assignment, Business Hours, Snooze & @Mentions
+- **Date / Timestamp:** 2026-11-11T04:10:00+05:00
+- **Git Branch:** `phase-3a-inbox`
+- **Files Changed:**
+  - `src/lib/inbox/canned-replies.ts` (Created CannedReplyService: search by `/` shortcut and title, variable interpolation `{{contact_name}}`, `{{agent_name}}`)
+  - `src/lib/inbox/assignment.ts` (Created AssignmentService: round-robin cyclic distribution and least-loaded routing across online agents with availability checks)
+  - `src/lib/inbox/business-hours.ts` (Created BusinessHoursService: timezone-aware schedule evaluation, duplicate after-hours auto-reply suppression at most once per closed period)
+  - `src/lib/inbox/snooze.ts` (Created SnoozeService: active snooze detection, presets, automatic unsnooze and conversation reopening upon new inbound customer message)
+  - `src/lib/inbox/mentions.ts` (Created MentionService: regex extraction of `@FullName`, in-app agent notification generation)
+  - `src/components/inbox/ChatWindow.tsx` (Integrated canned reply trigger on `/` and toolbar button, variable replacement preview, internal note @mentions dropdown, header snooze controls with presets & indicator banner, label tag pills)
+  - `src/components/inbox/ConversationList.tsx` (5-tab navigation: Open, Mine, Free, Snooze, Done; horizontal label filter pill bar; snooze badge indicator)
+  - `src/components/layout/Navbar.tsx` (Notification bell with active @mention counter, dropdown listing unread agent notifications with dismiss)
+  - `src/components/settings/WabaSettings.tsx` (Added inbox automation configuration: auto-assignment mode, business hours schedule toggle, timezone picker, auto-reply text)
+  - `src/app/page.tsx` (Tied together canned replies, @mention notification dispatching, inbound message auto-unsnooze, auto-assignment, after-hours auto-reply dispatching, snooze & label handlers)
+  - `src/lib/storage.ts` (Added `DEFAULT_CANNED_REPLIES`, updated `CLEAN_WORKSPACE` and `DEMO_WORKSPACE` with `autoAssignmentMode` and `businessHours`, updated demo conversations with labels)
+  - `src/types/crm.ts` (Added `CannedReply`, `AutoAssignmentMode`, `BusinessHoursSchedule`, `BusinessHoursConfig`, `AgentNotification`, extended `Workspace` and `Conversation`)
+  - `test-e2e.mjs` (Added 14 automated tests across Groups 24, 25, 26, 27, 28, 90 total tests)
+  - `supabase/migrations/20261113_01_inbox_productivity.sql` (Creates `canned_replies`, adds `auto_assignment_mode` & `business_hours` to `workspaces`, adds `snoozed_until`, `labels`, `last_after_hours_reply_at` to `conversations`, creates `agent_notifications` with GIN & compound indexes)
+- **Migrations Added:**
+  - `supabase/migrations/20261113_01_inbox_productivity.sql`:
+    - Creates `public.canned_replies` (`id`, `workspace_id`, `shortcut`, `title`, `content`, `category`, `created_at`, `UNIQUE(workspace_id, shortcut)`)
+    - Adds `auto_assignment_mode` and `business_hours` JSONB to `public.workspaces`
+    - Adds `snoozed_until`, `labels TEXT[]`, and `last_after_hours_reply_at` to `public.conversations` with GIN and partial indexes
+    - Creates `public.agent_notifications` for in-app teammate @mention delivery
+- **Environment Variables Added:**
+  - None required.
+- **Tests Added & Results:**
+  - 14 new automated tests in `test-e2e.mjs` (90/90 passed, 100%):
+    - Group 24: Canned replies search by `/` shortcut and placeholder interpolation (`{{contact_name}}`, `{{agent_name}}`)
+    - Group 25: Auto-assignment engine with round-robin and least-loaded modes; skips offline agents; handles all offline safely
+    - Group 26: Business hours timezone check (open Wednesday, closed Sunday); rate/cost safeguard dispatches auto-reply at most once per conversation per closed period; permits fresh conversation
+    - Group 27: Conversation snooze active/expired check; inbound message automatically unsnoozes conversation and resets status to open
+    - Group 28: Private note @mentions extraction; agent notification generation with author, recipient, and preview
+  - TypeScript strict: PASS (`tsc --noEmit` exited 0)
+  - Next.js Turbopack build: PASS (9/9 routes compiled cleanly)
+  - ESLint: PASS (0 errors, 0 warnings)
+  - E2E Tests: 90/90 passed (100%)
+- **// VERIFY Items:**
+  - Confirmed: Under Meta's updated pricing structure (effective Oct 2026+), customer care window replies can incur charges; gating after-hours auto-replies to at most once per conversation per closed period eliminates billable reply loops.
+- **Skipped & Rationale:**
+  - None.
+- **Status:** Complete / Ready for Review
