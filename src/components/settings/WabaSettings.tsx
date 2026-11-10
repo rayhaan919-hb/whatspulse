@@ -1,16 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
-import { WABAConfig } from '@/types/crm';
+import { WABAConfig, InAppAlert } from '@/types/crm';
 
 interface WabaSettingsProps {
   config: WABAConfig;
+  alerts?: InAppAlert[];
   onSaveConfig: (updated: Partial<WABAConfig>) => void;
+  onAcknowledgeAlert?: (alertId: string) => void;
 }
 
 export const WabaSettings: React.FC<WabaSettingsProps> = ({
   config,
+  alerts = [],
   onSaveConfig,
+  onAcknowledgeAlert,
 }) => {
   const [phoneNumberId, setPhoneNumberId] = useState(config.phoneNumberId);
   const [wabaId, setWabaId] = useState(config.wabaId);
@@ -18,6 +22,10 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
   const [accessToken, setAccessToken] = useState(config.accessToken);
   const [showAccessToken, setShowAccessToken] = useState(false);
   const [webhookVerifyToken, setWebhookVerifyToken] = useState(config.webhookVerifyToken);
+  const [qualityRating, setQualityRating] = useState(config.qualityRating || 'GREEN');
+  const [messagingLimit, setMessagingLimit] = useState(config.messagingLimit || 'TIER_10K');
+  const [allowanceScope, setAllowanceScope] = useState(config.allowanceScope || 'waba');
+  const [freeServiceMessages, setFreeServiceMessages] = useState(config.freeServiceMessagesMonthly || 1000);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -39,6 +47,10 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
       displayPhoneNumber,
       accessToken,
       webhookVerifyToken,
+      qualityRating,
+      messagingLimit,
+      allowanceScope,
+      freeServiceMessagesMonthly: freeServiceMessages,
     });
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
@@ -222,6 +234,133 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
             <p className="text-[11px] text-[#696969] mt-1">
               Protected by Supabase Service-Role isolation. Never exposed to public or authenticated client queries.
             </p>
+          </div>
+
+          {/* Step 3: Meta Account Health, Quality & Free Allowance */}
+          <div className="pt-4 border-t border-black/10 space-y-4">
+            <h4 className="text-xs font-bold text-black uppercase tracking-wider">
+              Health, Messaging Limits &amp; Billing Allowance
+            </h4>
+
+            {/* Quality Alerts Banner */}
+            {alerts.filter((a) => !a.acknowledged).length > 0 && (
+              <div className="space-y-2">
+                {alerts
+                  .filter((a) => !a.acknowledged)
+                  .map((alert) => (
+                    <div
+                      key={alert.id}
+                      className={`p-3.5 rounded-[8px] border text-xs flex items-start justify-between gap-3 ${
+                        alert.level === 'danger'
+                          ? 'bg-[#ff0033]/10 border-[#ff0033]/30 text-black'
+                          : 'bg-[#ff9900]/10 border-[#ff9900]/30 text-black'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="font-bold flex items-center gap-1.5">
+                          <span>{alert.title}</span>
+                          <span className="text-[10px] font-mono opacity-60">
+                            {new Date(alert.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#696969] leading-relaxed">
+                          {alert.message}
+                        </p>
+                      </div>
+                      {onAcknowledgeAlert && (
+                        <button
+                          type="button"
+                          onClick={() => onAcknowledgeAlert(alert.id)}
+                          className="px-2.5 py-1 text-[10px] font-bold rounded bg-black text-[#fffcec] shrink-0 hover:bg-[#3139fb]"
+                        >
+                          Dismiss
+                        </button>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Quality Rating */}
+              <div className="p-3.5 rounded-[8px] bg-[#fffcec] border border-black/15 space-y-1">
+                <div className="flex items-center justify-between text-xs font-bold text-black">
+                  <span>Quality Rating</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                      qualityRating === 'GREEN'
+                        ? 'bg-[#00c853]/15 text-[#00a843]'
+                        : qualityRating === 'YELLOW'
+                        ? 'bg-[#ff9900]/15 text-[#e68a00]'
+                        : 'bg-[#ff0033]/15 text-[#cc0029]'
+                    }`}
+                  >
+                    ● {qualityRating}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#696969]">
+                  {qualityRating === 'GREEN'
+                    ? 'High Quality — Messages delivered normally with low report rates.'
+                    : qualityRating === 'YELLOW'
+                    ? 'Medium Warning — Elevated spam reports. Action required.'
+                    : 'Critical Danger — Immediate risk of account block by Meta.'}
+                </p>
+              </div>
+
+              {/* Messaging Limit Tier */}
+              <div className="p-3.5 rounded-[8px] bg-[#fffcec] border border-black/15 space-y-1">
+                <div className="flex items-center justify-between text-xs font-bold text-black">
+                  <span>Messaging Limit Tier</span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-black/10 text-black">
+                    {messagingLimit}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#696969]">
+                  {messagingLimit === 'TIER_1K' && '1,000 unique customers per rolling 24-hour period.'}
+                  {messagingLimit === 'TIER_10K' && '10,000 unique customers per rolling 24-hour period.'}
+                  {messagingLimit === 'TIER_100K' && '100,000 unique customers per rolling 24-hour period.'}
+                  {messagingLimit === 'TIER_UNLIMITED' && 'Unlimited unique customer conversations per 24 hours.'}
+                </p>
+              </div>
+
+              {/* Free Allowance Scope (// VERIFY) */}
+              <div className="p-3.5 rounded-[8px] bg-[#fffcec] border border-black/15 space-y-2">
+                <label className="block text-xs font-bold text-black">
+                  <span>Free Allowance Scope</span>
+                  <span className="text-[9px] font-mono ml-1.5 text-[#3139fb]">// VERIFY</span>
+                </label>
+                <select
+                  value={allowanceScope}
+                  onChange={(e) => setAllowanceScope(e.target.value as 'waba' | 'phone_number')}
+                  className="w-full p-2 rounded-[6px] border border-black/20 bg-[#f7f4e3] text-xs font-mono outline-none"
+                >
+                  <option value="waba">Per WABA Portfolio (Shared across numbers)</option>
+                  <option value="phone_number">Per Phone Number (Independent pool)</option>
+                </select>
+                <p className="text-[10px] text-[#696969]">
+                  Determines whether the 1,000 monthly free tier pool is shared or per registered number.
+                </p>
+              </div>
+
+              {/* Monthly Free Messages */}
+              <div className="p-3.5 rounded-[8px] bg-[#fffcec] border border-black/15 space-y-2">
+                <label className="block text-xs font-bold text-black">
+                  <span>Monthly Free Service Messages</span>
+                  <span className="text-[9px] font-mono ml-1.5 text-[#3139fb]">// VERIFY</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="10000"
+                  value={freeServiceMessages}
+                  onChange={(e) => setFreeServiceMessages(parseInt(e.target.value, 10) || 0)}
+                  className="w-full p-2 rounded-[6px] border border-black/20 bg-[#f7f4e3] text-xs font-mono outline-none"
+                />
+                <p className="text-[10px] text-[#696969]">
+                  First 1,000 service customer replies each month are free of Meta fees.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="pt-2 flex items-center justify-between gap-4">

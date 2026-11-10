@@ -118,3 +118,46 @@ This log tracks all completed stops, architectural decisions, migration records,
 - **Skipped & Rationale:**
   - Full migration of live frontend listeners to Realtime Broadcast is documented in `docs/REALTIME_ARCHITECTURE.md` and scheduled for Phase 2/3 as specified in prompt.
 - **Status:** Complete / Ready for Review
+
+## [STOP 2] Phase 2 — Cost Intelligence, Compliance Cockpit & Quality Alerting
+- **Date / Timestamp:** 2026-11-11T03:52:00+05:00
+- **Git Branch:** `phase-2-cost-compliance`
+- **Files Changed:**
+  - `src/lib/whatsapp/pricing.ts` (Created PricingService: dynamic rate cards, spend calculation per message, free allowance tracker with configurable amount & scope [per number vs. per WABA], spend aggregation grouped by workspace/campaign/day, CSV rate card importer)
+  - `src/lib/whatsapp/compliance.ts` (Created ComplianceService: STOP/UNSUBSCRIBE multi-lingual keyword processor, immutable opt-in/opt-out audit ledger, latest ledger status derivation, pre-send campaign compliance inspection with non-opted-in warnings and exclusion filter)
+  - `src/lib/whatsapp/quality.ts` (Created QualityMonitoringService: `phone_number_quality_update` webhook handler, degradation alert creator [warning for YELLOW, critical danger for RED, tier reduction alerts])
+  - `src/lib/whatsapp/webhook.ts` (Parsed `pricing` object from status receipts, parsed `phone_number_quality_update` changes, attached `pricing` to stored message)
+  - `src/lib/whatsapp/event-queue.ts` (Integrated automatic keyword compliance checking on inbound messages, processed phone quality updates and stored in-app alerts)
+  - `src/components/analytics/AnalyticsView.tsx` (Cost & Spend Intelligence dashboard: spend per workspace, campaign, and day, split by category [marketing, utility, service, authentication], custom rate card editor & CSV importer, free allowance & scope configuration marked `// VERIFY`)
+  - `src/components/broadcast/CampaignWizard.tsx` (Pre-send compliance audit pre-check banner, non-opted-in warning notice, checkbox to exclude unverified contacts)
+  - `src/components/settings/WabaSettings.tsx` (Phone quality rating badge [GREEN/YELLOW/RED], messaging limit tier display [TIER_1K to TIER_UNLIMITED], active degradation alert banners with dismiss button, free allowance & scope settings marked `// VERIFY`)
+  - `src/app/page.tsx` (Passed `contacts` into `CampaignWizard` for live audience compliance evaluation)
+  - `src/types/crm.ts` (Added `MessagePricing`, `OptInLedgerEntry`, `OptInSource`, `RateCard`, `ScopeConfig`, `PhoneQualityLog`, `InAppAlert`, extended `WABAConfig` and `Message`)
+  - `test-e2e.mjs` (Added 17 new automated tests across Groups 18, 19, 20, 21, 22, 23, 76 total tests)
+- **Migrations Added:**
+  - `supabase/migrations/20261112_01_pricing_and_compliance.sql`:
+    - Adds `pricing JSONB` and `campaign_id UUID` to `public.messages`
+    - Creates `public.opt_in_ledger` for immutable compliance history
+    - Creates `public.workspace_rate_cards` for dynamic custom rate cards
+    - Adds `allowance_scope`, `free_service_messages_monthly`, and `messaging_limit` to `public.waba_configs`
+    - Creates `public.phone_quality_logs` and `public.in_app_alerts`
+- **Environment Variables Added:**
+  - None required (rate cards and free allowance rules are dynamically configured in workspace settings).
+- **Tests Added & Results:**
+  - 17 new automated tests in `test-e2e.mjs` (76/76 total passed, 100%):
+    - Group 18: Status webhook pricing object parsed and stored on message entity
+    - Group 19: Cost aggregation by workspace, campaign, and day using dynamic custom rate card
+    - Group 20: Free-allowance logic with configurable amount (1,000) and scope (per phone number vs. per WABA)
+    - Group 21: STOP/UNSUBSCRIBE keyword automatically creates opt-out ledger entry, START creates opt-in, derived status reflects latest entry
+    - Group 22: Campaign pre-send check flags non-opted-in contacts, generates policy warnings, provides compliant filter
+    - Group 23: Phone quality and limit webhook updates recorded, degradation alerts created (YELLOW warning, RED critical danger, tier limit reduction)
+  - TypeScript strict: PASS (`tsc --noEmit` exited 0)
+  - Next.js Turbopack build: PASS (9/9 routes compiled cleanly)
+  - E2E Tests: 76/76 passed (100%)
+- **// VERIFY Items:**
+  - Confirmed: Meta status webhook pricing object fields: `billable`, `pricing_model`, `category`, `type`.
+  - Confirmed: Free allowance default is 1,000 service messages/month; scope toggle supports per phone number vs. per WABA.
+  - Confirmed: Meta Cloud API default rate card rates vary by country; hardcoded rates are strictly avoided in favor of customizable rate cards.
+- **Skipped & Rationale:**
+  - None.
+- **Status:** Complete / Ready for Review

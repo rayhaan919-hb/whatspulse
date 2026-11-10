@@ -1,16 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BroadcastCampaign, MessageTemplate } from '@/types/crm';
+import { BroadcastCampaign, MessageTemplate, Contact, OptInLedgerEntry } from '@/types/crm';
+import { ComplianceService } from '@/lib/whatsapp/compliance';
 
 interface CampaignWizardProps {
   campaigns: BroadcastCampaign[];
   templates: MessageTemplate[];
   availableTags: string[];
+  contacts?: Contact[];
+  optLedger?: OptInLedgerEntry[];
   onCreateCampaign: (data: {
     name: string;
     templateId: string;
     targetTags: string[];
+    excludeNonOptedIn?: boolean;
   }) => void;
 }
 
@@ -18,6 +22,8 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({
   campaigns,
   templates,
   availableTags,
+  contacts = [],
+  optLedger = [],
   onCreateCampaign,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -26,6 +32,13 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({
     templates[0]?.id || ''
   );
   const [selectedTags, setSelectedTags] = useState<string[]>(['VIP Client']);
+  const [excludeNonOptedIn, setExcludeNonOptedIn] = useState(true);
+
+  // Compute targeted audience compliance audit
+  const targetedContacts = contacts.filter((c) =>
+    c.tags.some((t) => selectedTags.includes(t))
+  );
+  const audit = ComplianceService.validateCampaignRecipients(targetedContacts, optLedger);
 
   // Close modal on Escape key
   useEffect(() => {
@@ -46,6 +59,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({
       name: name.trim(),
       templateId: selectedTemplateId,
       targetTags: selectedTags,
+      excludeNonOptedIn,
     });
 
     setName('');
@@ -275,6 +289,48 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({
                       );
                     })}
                   </div>
+                </div>
+
+                {/* 4. Compliance & Opt-in Verification */}
+                <div className="p-3.5 rounded-[10px] bg-[#f7f4e3] border border-black/15 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-black flex items-center gap-1.5">
+                      <span>4. Opt-In Compliance Pre-Check</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/10 text-black">
+                        {targetedContacts.length} recipient(s) targeted
+                      </span>
+                    </label>
+                  </div>
+
+                  {audit.warnings.length > 0 ? (
+                    <div className="space-y-2">
+                      {audit.warnings.map((w, idx) => (
+                        <div
+                          key={idx}
+                          className="text-[11px] p-2.5 rounded-[6px] bg-[#ff9900]/10 border border-[#ff9900]/30 text-black leading-relaxed"
+                        >
+                          {w}
+                        </div>
+                      ))}
+
+                      <label className="flex items-center gap-2 pt-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={excludeNonOptedIn}
+                          onChange={(e) => setExcludeNonOptedIn(e.target.checked)}
+                          className="rounded border-black/30 text-[#3139fb] focus:ring-0 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-black">
+                          Exclude unverified contacts (Send strictly to {audit.optedInCount} opted-in recipients)
+                        </span>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] p-2 rounded-[6px] bg-[#00c853]/10 border border-[#00c853]/30 text-[#008f39] font-medium flex items-center gap-1.5">
+                      <span>✓</span>
+                      <span>100% of targeted contacts have verified opt-in records in compliance ledger.</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2 flex justify-end gap-2.5 border-t border-black/10">

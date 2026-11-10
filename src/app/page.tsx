@@ -603,6 +603,7 @@ export default function WhatsPulseApp() {
             campaigns={campaigns}
             templates={templates}
             availableTags={['VIP Client', 'Enterprise', 'Lead - High Intent', 'Wholesale', 'Urgent Support']}
+            contacts={contacts}
             onCreateCampaign={handleCreateCampaign}
           />
         )}
