@@ -30,6 +30,8 @@ import { MentionService } from '@/lib/inbox/mentions';
 import { SnoozeService } from '@/lib/inbox/snooze';
 import { AssignmentService } from '@/lib/inbox/assignment';
 import { BusinessHoursService } from '@/lib/inbox/business-hours';
+import { DemoIsolationService } from '@/lib/demo/demo-isolation';
+import { playInboundChime, showInboundNotification } from '@/lib/audio/sound';
 
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar, NavigationTab } from '@/components/layout/Sidebar';
@@ -69,17 +71,48 @@ export default function WhatsPulseApp() {
 
   const [aiSummary, setAiSummary] = useState<AISummaryResponse | null>(null);
   const [isAiSummaryLoading, setIsAiSummaryLoading] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // Bulk conversation operations
+  const handleBulkUpdateStatus = (ids: string[], status: Conversation['status']) => {
+    setConversations((prev) =>
+      prev.map((c) => (ids.includes(c.id) ? { ...c, status } : c))
+    );
+  };
+
+  const handleBulkAssign = (ids: string[], agentId?: string) => {
+    const assignedAgent = allMembers.find((m) => m.id === agentId);
+    setConversations((prev) =>
+      prev.map((c) =>
+        ids.includes(c.id) ? { ...c, assignedTo: agentId, assignedAgent } : c
+      )
+    );
+  };
+
+  const handleBulkAddLabel = (ids: string[], label: string) => {
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (!ids.includes(c.id)) return c;
+        const existing = c.labels || [];
+        if (existing.includes(label)) return c;
+        return { ...c, labels: [...existing, label] };
+      })
+    );
+  };
 
   const clearDemoData = () => {
     setIsDemoMode(false);
-    setWorkspace(CLEAN_WORKSPACE);
-    setAllMembers(CLEAN_MEMBERS);
-    setCurrentMemberId(CLEAN_MEMBERS[0].id);
-    setWabaConfig(CLEAN_WABA_CONFIG);
-    setContacts([]);
-    setConversations([]);
-    setMessages([]);
-    setCampaigns([]);
+    if (workspace.isDemo) {
+      setWorkspace(CLEAN_WORKSPACE);
+      setAllMembers(CLEAN_MEMBERS);
+      setCurrentMemberId(CLEAN_MEMBERS[0].id);
+      setWabaConfig(CLEAN_WABA_CONFIG);
+    }
+    // Strict isolation: only purge records tagged with isDemo: true
+    setContacts((prev) => DemoIsolationService.purgeDemoData(prev).remaining);
+    setConversations((prev) => DemoIsolationService.purgeDemoData(prev).remaining);
+    setMessages((prev) => DemoIsolationService.purgeDemoData(prev).remaining);
+    setCampaigns((prev) => DemoIsolationService.purgeDemoData(prev).remaining);
     setSelectedConversationId('');
     setIsDrawerOpen(false);
     localStorage.setItem('whatspulse_demo_mode', 'false');
@@ -447,6 +480,12 @@ export default function WhatsPulseApp() {
       };
       setMessages((prev) => [...prev, newMsg]);
 
+      // Sound and browser notification for inbound messages
+      if (soundEnabled) {
+        playInboundChime();
+      }
+      showInboundNotification(senderName, textBody);
+
       // Check Business Hours & Dispatch After-Hours Auto-Reply if eligible
       if (workspace.businessHours && workspace.businessHours.enabled) {
         const shouldReply = BusinessHoursService.shouldSendAfterHoursAutoReply(
@@ -625,6 +664,12 @@ export default function WhatsPulseApp() {
               }}
               currentMember={currentMember}
               onOpenSimulator={() => setActiveTab('simulator')}
+              availableAgents={allMembers}
+              onBulkUpdateStatus={handleBulkUpdateStatus}
+              onBulkAssign={handleBulkAssign}
+              onBulkAddLabel={handleBulkAddLabel}
+              soundEnabled={soundEnabled}
+              onToggleSound={setSoundEnabled}
             />
 
             {/* Central Chat Window or Beginner-Friendly 3-Step Quick Start */}

@@ -6,6 +6,7 @@ import { CareWindowService } from '@/lib/whatsapp/care-window';
 import { MetaErrorMapper } from '@/lib/whatsapp/errors';
 import { CannedReplyService } from '@/lib/inbox/canned-replies';
 import { SnoozeService } from '@/lib/inbox/snooze';
+import { PresenceService, ViewerPresence } from '@/lib/realtime/presence';
 import { DEFAULT_CANNED_REPLIES } from '@/lib/storage';
 
 interface ChatWindowProps {
@@ -15,10 +16,13 @@ interface ChatWindowProps {
   allMembers: WorkspaceMember[];
   templates: MessageTemplate[];
   cannedReplies?: CannedReply[];
+  activeViewers?: ViewerPresence[];
   onSendMessage: (data: {
     content: string;
     isInternalNote: boolean;
     templateName?: string;
+    mediaUrl?: string;
+    messageType?: 'text' | 'image' | 'audio' | 'video' | 'document';
   }) => Promise<void>;
   onUpdateStatus: (status: 'open' | 'pending' | 'resolved') => void;
   onAssignAgent: (agentId?: string) => void;
@@ -37,8 +41,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   allMembers,
   templates,
   cannedReplies = DEFAULT_CANNED_REPLIES,
+  activeViewers = [],
   onSendMessage,
   onUpdateStatus,
+  onAssignAgent,
   onToggleDrawer,
   isDrawerOpen,
   onRequestAISummary,
@@ -68,6 +74,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const isSnoozed = SnoozeService.isSnoozed(conversation);
 
+  // Agent collision detection: check if other teammates are viewing or typing
+  const collision = PresenceService.detectCollision(activeViewers, currentMember.id);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -92,6 +101,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleSend = async () => {
     if (!inputText.trim() || isSending) return;
+
+    // Claim-on-reply: automatically assign conversation to responding agent
+    if (!isInternalNote && (!conversation.assignedTo || conversation.assignedTo !== currentMember.id)) {
+      onAssignAgent(currentMember.id);
+    }
+
     setIsSending(true);
     try {
       await onSendMessage({
@@ -108,8 +123,51 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
+  const handleSendVoiceNote = async () => {
+    if (isSending || (!isWindowOpen && !isInternalNote)) return;
+
+    if (!isInternalNote && (!conversation.assignedTo || conversation.assignedTo !== currentMember.id)) {
+      onAssignAgent(currentMember.id);
+    }
+
+    setIsSending(true);
+    try {
+      await onSendMessage({
+        content: '🎙️ Voice note (0:14)',
+        isInternalNote: false,
+        messageType: 'audio',
+        mediaUrl: 'https://example.com/audio/voice_message.ogg',
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleAttachMedia = async () => {
+    if (isSending || (!isWindowOpen && !isInternalNote)) return;
+
+    if (!isInternalNote && (!conversation.assignedTo || conversation.assignedTo !== currentMember.id)) {
+      onAssignAgent(currentMember.id);
+    }
+
+    setIsSending(true);
+    try {
+      await onSendMessage({
+        content: '📷 Document Receipt Attachment',
+        isInternalNote: false,
+        messageType: 'image',
+        mediaUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600',
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const handleSelectTemplate = async (tmpl: MessageTemplate) => {
     setShowTemplates(false);
+    if (!conversation.assignedTo || conversation.assignedTo !== currentMember.id) {
+      onAssignAgent(currentMember.id);
+    }
     setIsSending(true);
     try {
       await onSendMessage({
@@ -179,7 +237,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setShowCannedReplies((prev) => !prev);
   };
 
-  // Matched canned replies based on composer input
   const matchedCannedReplies = CannedReplyService.search(cannedReplies, inputText);
 
   return (
@@ -423,6 +480,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       </div>
 
+      {/* Collision Warning Banner */}
+      {collision.isCollision && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-xs text-amber-900 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="animate-pulse">⚠️</span>
+            <span>
+              <strong>Collision Warning:</strong> {collision.collidingMembers.join(', ')} is currently viewing this conversation
+              {collision.isAnyoneTyping ? ' and drafting a reply...' : '.'}
+            </span>
+          </div>
+          <span className="text-[10px] font-mono bg-amber-200/60 px-2 py-0.5 rounded text-amber-900">
+            Claim-on-reply active
+          </span>
+        </div>
+      )}
+
       {/* Snoozed Banner Indicator */}
       {isSnoozed && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-xs text-amber-900 shrink-0">
@@ -522,9 +595,43 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </div>
                   )}
 
-                  <p className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap break-words">
-                    {msg.content}
-                  </p>
+                  {/* Media / Voice Note Renderers */}
+                  {msg.messageType === 'audio' ? (
+                    <div className="flex items-center gap-3 p-2 bg-white/10 rounded-[10px] my-1 font-mono text-xs">
+                      <button
+                        type="button"
+                        className="w-7 h-7 rounded-full bg-white text-black font-bold flex items-center justify-center cursor-pointer shrink-0"
+                      >
+                        ▶
+                      </button>
+                      <div className="flex-1 flex items-center gap-1 opacity-75">
+                        <span className="h-2 w-0.5 bg-current"></span>
+                        <span className="h-4 w-0.5 bg-current"></span>
+                        <span className="h-6 w-0.5 bg-current"></span>
+                        <span className="h-3 w-0.5 bg-current"></span>
+                        <span className="h-5 w-0.5 bg-current"></span>
+                        <span className="h-2 w-0.5 bg-current"></span>
+                        <span className="h-4 w-0.5 bg-current"></span>
+                      </div>
+                      <span className="text-[10px] opacity-75">0:14</span>
+                    </div>
+                  ) : msg.messageType === 'image' && msg.mediaUrl ? (
+                    <div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={msg.mediaUrl}
+                        alt="Media attachment"
+                        className="rounded-[8px] max-h-48 object-cover mb-1.5 border border-white/15"
+                      />
+                      <p className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap break-words">
+                        {msg.content}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap break-words">
+                      {msg.content}
+                    </p>
+                  )}
 
                   {msg.interactiveData?.selectedButtonId && (
                     <div className="mt-2 pt-2 border-t border-current/15 text-[11px] font-semibold opacity-90">
@@ -532,7 +639,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </div>
                   )}
 
-                  {/* Timestamp & Read Receipts */}
+                  {/* Timestamp & Progressive Read Receipts */}
                   <div
                     className={`flex items-center justify-end gap-1.5 mt-1.5 text-[10px] ${
                       isOutbound ? 'text-[#fffcec]/70' : 'text-[#696969]'
@@ -546,7 +653,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </span>
                     {isOutbound && (
                       <span>
-                        {msg.status === 'read' ? (
+                        {msg.status === 'pending' ? (
+                          <span
+                            className="text-[#fffcec]/60 font-mono text-[10px]"
+                            title="Sending message..."
+                          >
+                            🕒
+                          </span>
+                        ) : msg.status === 'read' ? (
                           <span
                             className="text-[#96c4ff] font-bold text-xs"
                             title="Read by customer"
@@ -556,7 +670,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         ) : msg.status === 'delivered' ? (
                           <span
                             className="text-[#fffcec]/80 font-bold text-xs"
-                            title="Delivered"
+                            title="Delivered to device"
                           >
                             ✓✓
                           </span>
@@ -570,7 +684,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         ) : (
                           <span
                             className="text-[#fffcec]/60 font-bold text-xs"
-                            title="Sent"
+                            title="Sent to WhatsApp Cloud"
                           >
                             ✓
                           </span>
@@ -587,7 +701,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           msg.errorCode,
                           typeof msg.errorDetails === 'string'
                             ? msg.errorDetails
-                            : msg.errorDetails?.message
+                            : (msg.errorDetails as { message?: string })?.message
                         ).userMessage}
                       </p>
                       <button
@@ -840,6 +954,34 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               >
                 <span>⚡</span>
                 <span>Canned (/)</span>
+              </button>
+            )}
+
+            {/* Voice Note Simulation Trigger */}
+            {!isInternalNote && (
+              <button
+                type="button"
+                onClick={handleSendVoiceNote}
+                disabled={(!isWindowOpen && !isInternalNote) || isSending}
+                className="px-2.5 py-1 rounded-[8px] border border-black/20 hover:bg-[#f7f4e3] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                title="Send a voice note"
+              >
+                <span>🎙️</span>
+                <span className="hidden sm:inline">Voice Note</span>
+              </button>
+            )}
+
+            {/* Media Attachment Trigger */}
+            {!isInternalNote && (
+              <button
+                type="button"
+                onClick={handleAttachMedia}
+                disabled={(!isWindowOpen && !isInternalNote) || isSending}
+                className="px-2.5 py-1 rounded-[8px] border border-black/20 hover:bg-[#f7f4e3] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                title="Attach photo or document"
+              >
+                <span>📎</span>
+                <span className="hidden sm:inline">Media</span>
               </button>
             )}
 
