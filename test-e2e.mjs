@@ -24,8 +24,11 @@ const { OutboundQueue } = await import('./src/lib/queue/outbound-queue.ts');
 const { CryptoService } = await import('./src/lib/whatsapp/crypto.ts');
 const { TemplateValidator } = await import('./src/lib/whatsapp/template-validator.ts');
 const { MediaStorageService } = await import('./src/lib/whatsapp/media.ts');
+const { PricingService } = await import('./src/lib/whatsapp/pricing.ts');
+const { ComplianceService } = await import('./src/lib/whatsapp/compliance.ts');
+const { QualityMonitoringService } = await import('./src/lib/whatsapp/quality.ts');
 
-console.log('🚀 Starting WhatsPulse CRM Phase 1C Automated Test Suite...\n');
+console.log('🚀 Starting WhatsPulse CRM Phase 2 Automated Test Suite...\n');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -804,14 +807,362 @@ assert(
 );
 
 // ============================================================================
+// Group 18: Status Webhook Pricing Object Parsing & Message Attachment
+// ============================================================================
+console.log('\n--- Test Group 18: Status Webhook Pricing Object & Storage ---');
+
+const mockPricingPayload = {
+  entry: [{
+    changes: [{
+      value: {
+        messaging_product: 'whatsapp',
+        metadata: { phone_number_id: '109847291823749', display_phone_number: '+15550192834' },
+        statuses: [{
+          id: 'wamid.HBgL_PRICE_001',
+          recipient_id: '14155552671',
+          status: 'delivered',
+          timestamp: '1731234567',
+          pricing: {
+            billable: true,
+            pricing_model: 'CBP',
+            category: 'marketing',
+          },
+        }],
+      },
+      field: 'messages',
+    }],
+  }],
+};
+
+const parsedPricing = WebhookProcessor.parsePayload(mockPricingPayload);
+assert(
+  parsedPricing.statusUpdates.length === 1 &&
+  parsedPricing.statusUpdates[0].pricing?.billable === true &&
+  parsedPricing.statusUpdates[0].pricing?.category === 'marketing' &&
+  parsedPricing.statusUpdates[0].pricing?.pricingModel === 'CBP',
+  'Pricing object parsed accurately from incoming status webhook payload'
+);
+
+const testMessageStore = [{
+  id: 'msg_price_01',
+  workspaceId: 'ws_prod_01',
+  waMessageId: 'wamid.HBgL_PRICE_001',
+  senderType: 'agent',
+  messageType: 'template',
+  content: 'Black Friday 50% Off!',
+  status: 'sent',
+  createdAt: '2026-11-10T12:00:00Z',
+}];
+
+WebhookProcessor.processStatusUpdate(
+  'ws_prod_01',
+  parsedPricing.statusUpdates[0],
+  testMessageStore,
+  []
+);
+
+assert(
+  testMessageStore[0].status === 'delivered' &&
+  testMessageStore[0].pricing?.billable === true &&
+  testMessageStore[0].pricing?.category === 'marketing',
+  'Pricing object securely attached to stored message entity upon status update'
+);
+
+// ============================================================================
+// Group 19: Dynamic Rate Card Spend Aggregation (Workspace, Campaign, Day)
+// ============================================================================
+console.log('\n--- Test Group 19: Dynamic Rate Card Spend Aggregation ---');
+
+const customRateCard = {
+  id: 'rc_custom_2026',
+  workspaceId: 'ws_prod_01',
+  currency: 'USD',
+  rates: {
+    marketing: 0.05,
+    utility: 0.015,
+    service: 0.01,
+    authentication: 0.03,
+  },
+};
+
+const sampleAggMessages = [
+  { id: 'm1', workspaceId: 'ws_prod_01', campaignId: 'camp_01', createdAt: '2026-11-10T10:00:00Z', pricing: { billable: true, category: 'marketing' } },
+  { id: 'm2', workspaceId: 'ws_prod_01', campaignId: 'camp_01', createdAt: '2026-11-10T11:00:00Z', pricing: { billable: true, category: 'marketing' } },
+  { id: 'm3', workspaceId: 'ws_prod_01', campaignId: 'camp_02', createdAt: '2026-11-10T12:00:00Z', pricing: { billable: true, category: 'utility' } },
+  { id: 'm4', workspaceId: 'ws_prod_01', createdAt: '2026-11-11T09:00:00Z', pricing: { billable: true, category: 'service' } },
+  { id: 'm5', workspaceId: 'ws_prod_02', createdAt: '2026-11-11T10:00:00Z', pricing: { billable: true, category: 'marketing' } },
+];
+
+const aggByWorkspace = PricingService.aggregateCosts(sampleAggMessages, {
+  groupBy: 'workspace',
+  rateCard: customRateCard,
+});
+
+assert(
+  Math.abs(aggByWorkspace['ws_prod_01'].totalCost - 0.125) < 0.0001 &&
+  aggByWorkspace['ws_prod_01'].messageCount === 4 &&
+  aggByWorkspace['ws_prod_01'].byCategory.marketing.count === 2,
+  'Cost aggregation by workspace accurately computes spend and category counts from custom rate card'
+);
+
+const aggByCampaign = PricingService.aggregateCosts(sampleAggMessages, {
+  groupBy: 'campaign',
+  rateCard: customRateCard,
+});
+
+assert(
+  Math.abs(aggByCampaign['camp_01'].totalCost - 0.10) < 0.0001 &&
+  Math.abs(aggByCampaign['camp_02'].totalCost - 0.015) < 0.0001,
+  'Cost aggregation by campaign accurately computes attributable marketing and utility spend'
+);
+
+const aggByDay = PricingService.aggregateCosts(sampleAggMessages, {
+  groupBy: 'day',
+  rateCard: customRateCard,
+});
+
+assert(
+  Math.abs(aggByDay['2026-11-10'].totalCost - 0.115) < 0.0001 &&
+  Math.abs(aggByDay['2026-11-11'].totalCost - 0.06) < 0.0001,
+  'Cost aggregation by day accurately groups historical message expenditures'
+);
+
+// ============================================================================
+// Group 20: Free-Allowance Scope Logic (Per Number vs. Per WABA)
+// ============================================================================
+console.log('\n--- Test Group 20: Free-Allowance Scope (Per Number vs. Per WABA) ---');
+
+// Case A: Scope = 'waba' (Pool shared across all numbers in WABA)
+const wabaScopeConfig = {
+  freeServiceMessagesMonthly: 1000,
+  allowanceScope: 'waba', // // VERIFY
+};
+
+const trackerWaba = PricingService.createUsageTracker(wabaScopeConfig);
+// Simulate 1,000 free service messages across two numbers under same WABA
+for (let i = 0; i < 600; i++) {
+  trackerWaba.recordMessage({ category: 'service', phoneNumberId: 'phone_A', wabaId: 'waba_01' });
+}
+for (let i = 0; i < 400; i++) {
+  trackerWaba.recordMessage({ category: 'service', phoneNumberId: 'phone_B', wabaId: 'waba_01' });
+}
+
+// 1,001st service message under same WABA should NOT be free
+const wabaResult1001 = PricingService.calculateMessageCost(
+  { pricing: { billable: true, category: 'service' }, phoneNumberId: 'phone_A', wabaId: 'waba_01' },
+  customRateCard,
+  trackerWaba
+);
+
+assert(
+  wabaResult1001.isFreeTier === false &&
+  Math.abs(wabaResult1001.cost - 0.01) < 0.0001,
+  'WABA-scoped free allowance is exhausted across shared phone numbers (1001st message billed)'
+);
+
+// Case B: Scope = 'phone_number' (Independent pool for each registered number)
+const phoneScopeConfig = {
+  freeServiceMessagesMonthly: 1000,
+  allowanceScope: 'phone_number', // // VERIFY
+};
+
+const trackerPhone = PricingService.createUsageTracker(phoneScopeConfig);
+for (let i = 0; i < 1000; i++) {
+  trackerPhone.recordMessage({ category: 'service', phoneNumberId: 'phone_A', wabaId: 'waba_01' });
+}
+
+// Phone A 1001st is billed
+const phoneAResult = PricingService.calculateMessageCost(
+  { pricing: { billable: true, category: 'service' }, phoneNumberId: 'phone_A', wabaId: 'waba_01' },
+  customRateCard,
+  trackerPhone
+);
+
+// Phone B 1st message is STILL FREE under phone_number scope
+const phoneBResult = PricingService.calculateMessageCost(
+  { pricing: { billable: true, category: 'service' }, phoneNumberId: 'phone_B', wabaId: 'waba_01' },
+  customRateCard,
+  trackerPhone
+);
+
+assert(
+  phoneAResult.isFreeTier === false &&
+  phoneBResult.isFreeTier === true &&
+  phoneBResult.cost === 0,
+  'Phone-number-scoped free allowance gives independent 1,000 allowance to each registered number'
+);
+
+// ============================================================================
+// Group 21: Automatic Keyword Opt-Out & Ledger Derivation
+// ============================================================================
+console.log('\n--- Test Group 21: Automatic Keyword Opt-Out & Ledger Derivation ---');
+
+const complianceLedger = [];
+
+// Customer replies STOP
+const stopResult = ComplianceService.processInboundKeyword({
+  text: 'STOP',
+  workspaceId: 'ws_prod_01',
+  contactId: 'cnt_marcus',
+  phoneNumber: '+14155552671',
+}, complianceLedger);
+
+assert(
+  stopResult.optOutRecorded === true &&
+  stopResult.currentStatus === 'opted_out' &&
+  complianceLedger.length === 1 &&
+  complianceLedger[0].status === 'opted_out' &&
+  complianceLedger[0].source === 'keyword_stop',
+  'Replying "STOP" automatically records opt-out ledger entry with evidence note'
+);
+
+// Derived status reflects latest ledger entry
+assert(
+  ComplianceService.resolveContactStatus('cnt_marcus', complianceLedger) === 'opted_out',
+  'Contact status is dynamically derived from immutable compliance ledger'
+);
+
+// Customer subsequently replies START
+const startResult = ComplianceService.processInboundKeyword({
+  text: 'START',
+  workspaceId: 'ws_prod_01',
+  contactId: 'cnt_marcus',
+  phoneNumber: '+14155552671',
+}, complianceLedger);
+
+assert(
+  startResult.optInRecorded === true &&
+  ComplianceService.resolveContactStatus('cnt_marcus', complianceLedger) === 'opted_in',
+  'Replying "START" records new opt-in ledger entry, updating derived status to opted_in'
+);
+
+// Case-insensitive unsubscribe
+const unsubResult = ComplianceService.processInboundKeyword({
+  text: '  unsubscribe  ',
+  workspaceId: 'ws_prod_01',
+  contactId: 'cnt_clara',
+  phoneNumber: '+447911123456',
+}, complianceLedger);
+
+assert(
+  unsubResult.optOutRecorded === true &&
+  ComplianceService.resolveContactStatus('cnt_clara', complianceLedger) === 'opted_out',
+  'Case-insensitive and whitespace-trimmed "unsubscribe" properly triggers opt-out'
+);
+
+// ============================================================================
+// Group 22: Pre-Send Campaign Compliance Inspection
+// ============================================================================
+console.log('\n--- Test Group 22: Pre-Send Campaign Compliance Inspection ---');
+
+const sampleAudience = [
+  { id: 'c1', name: 'User 1', phoneNumber: '+1001' },
+  { id: 'c2', name: 'User 2', phoneNumber: '+1002' },
+  { id: 'c3', name: 'User 3', phoneNumber: '+1003' },
+  { id: 'c4', name: 'User 4', phoneNumber: '+1004' },
+];
+
+const mockLedger = [
+  { contactId: 'c1', status: 'opted_in', source: 'web_form', timestamp: '2026-10-01T00:00:00Z' },
+  { contactId: 'c2', status: 'opted_in', source: 'checkout_checkbox', timestamp: '2026-10-02T00:00:00Z' },
+  { contactId: 'c3', status: 'opted_out', source: 'keyword_stop', timestamp: '2026-10-03T00:00:00Z' },
+  // c4 has no ledger entries -> status unknown
+];
+
+const audit = ComplianceService.validateCampaignRecipients(sampleAudience, mockLedger);
+
+assert(
+  audit.total === 4 &&
+  audit.optedInCount === 2 &&
+  audit.optedOutCount === 1 &&
+  audit.unknownCount === 1 &&
+  audit.flaggedCount === 2, // c3 (opted_out) + c4 (unknown)
+  'Pre-send campaign audit correctly identifies contacts lacking explicit opt-in'
+);
+
+assert(
+  audit.warnings.length > 0 &&
+  audit.warnings[0].includes('opt-in'),
+  'Pre-send compliance warning generated for non-opted-in contacts'
+);
+
+const safeList = audit.filterCompliantRecipients(true);
+assert(
+  safeList.length === 2 &&
+  safeList.map(c => c.id).sort().join(',') === 'c1,c2',
+  'Filter helper cleanly isolates only verified opted-in recipients'
+);
+
+// ============================================================================
+// Group 23: Phone Quality & Messaging Limit Webhooks with Degradation Alerting
+// ============================================================================
+console.log('\n--- Test Group 23: Phone Quality & Limit Webhooks with Degradation Alerting ---');
+
+const qualityAlerts = [];
+
+const qualityPayload = {
+  display_phone_number: '+1 (555) 019-2834',
+  event: 'ON_FLAGGED',
+  current_limit: 'TIER_10K',
+  quality_rating: 'YELLOW', // Dropped from GREEN
+};
+
+const qualityResult = QualityMonitoringService.processQualityUpdate(
+  qualityPayload,
+  'ws_prod_01',
+  qualityAlerts,
+  'GREEN' // Previous rating
+);
+
+assert(
+  qualityResult.degraded === true &&
+  qualityResult.newRating === 'YELLOW' &&
+  qualityAlerts.length === 1 &&
+  qualityAlerts[0].level === 'warning' &&
+  qualityAlerts[0].title.includes('Degraded'),
+  'Quality rating degradation (GREEN -> YELLOW) records quality log and triggers in-app alert'
+);
+
+// Severe drop to RED
+QualityMonitoringService.processQualityUpdate(
+  { ...qualityPayload, quality_rating: 'RED', event: 'ON_FLAGGED' },
+  'ws_prod_01',
+  qualityAlerts,
+  'YELLOW'
+);
+
+assert(
+  qualityAlerts.length === 2 &&
+  qualityAlerts[1].level === 'danger' &&
+  qualityAlerts[1].message.includes('RED'),
+  'Quality drop to RED creates urgent critical danger alert'
+);
+
+// Messaging limit downgrade
+const limitDowngradeResult = QualityMonitoringService.processQualityUpdate(
+  { ...qualityPayload, quality_rating: 'RED', current_limit: 'TIER_1K', event: 'ON_LIMIT_CHANGED' },
+  'ws_prod_01',
+  qualityAlerts,
+  'RED',
+  'TIER_10K' // Previous limit
+);
+
+assert(
+  limitDowngradeResult.limitDegraded === true &&
+  qualityAlerts.length === 3 &&
+  qualityAlerts[2].title.includes('Messaging Limit'),
+  'Messaging limit downgrade triggers dedicated tier reduction alert'
+);
+
+// ============================================================================
 // Final Summary
 // ============================================================================
 console.log(`\n======================================================`);
 console.log(`Test Results: ${passedTests}/${totalTests} tests passed (${Math.round((passedTests / totalTests) * 100)}%)`);
 if (passedTests === totalTests) {
-  console.log(`Phase 1C Templates, Secrets & Media Verification Completed Successfully! 🚀`);
+  console.log(`Phase 2 Cost & Compliance Verification Completed Successfully! 🚀`);
 } else {
-  console.error(`❌ Some tests failed in Phase 1C verification.`);
+  console.error(`❌ Some tests failed in Phase 2 verification.`);
   process.exitCode = 1;
 }
 console.log(`======================================================\n`);
