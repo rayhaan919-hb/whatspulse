@@ -18,8 +18,11 @@ if (!process.execArgv.includes('--experimental-strip-types')) {
 
 // Dynamic import after strip-types is guaranteed active
 const { WebhookProcessor } = await import('./src/lib/whatsapp/webhook.ts');
+const { CareWindowService } = await import('./src/lib/whatsapp/care-window.ts');
+const { MetaErrorMapper } = await import('./src/lib/whatsapp/errors.ts');
+const { OutboundQueue } = await import('./src/lib/queue/outbound-queue.ts');
 
-console.log('🚀 Starting WhatsPulse CRM Phase 1A Automated Test Suite...\n');
+console.log('🚀 Starting WhatsPulse CRM Phase 1B Automated Test Suite...\n');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -385,14 +388,234 @@ assert(
 );
 
 // ============================================================================
+// Group 8: Customer Care Window (24h) & Server-Side Enforcement
+// ============================================================================
+console.log('\n--- Test Group 8: Customer Care Window (24h) Server-Side Enforcement ---');
+
+const nowMs = Date.now();
+const twentyFiveHoursAgo = new Date(nowMs - 25 * 60 * 60 * 1000).toISOString();
+const tenHoursAgo = new Date(nowMs - 10 * 60 * 60 * 1000).toISOString();
+
+// 8.1 Non-template send outside 24h window is rejected with typed error
+const expiredNonTemplate = CareWindowService.validateOutboundSend({
+  isTemplate: false,
+  lastInboundAt: twentyFiveHoursAgo,
+});
+assert(
+  expiredNonTemplate.allowed === false &&
+  expiredNonTemplate.code === 'WINDOW_CLOSED' &&
+  expiredNonTemplate.errorCode === 131047,
+  'Non-template send outside 24h window is rejected with typed error 131047 (WINDOW_CLOSED)'
+);
+
+// 8.2 Template send outside 24h window is ALLOWED
+const expiredTemplate = CareWindowService.validateOutboundSend({
+  isTemplate: true,
+  lastInboundAt: twentyFiveHoursAgo,
+});
+assert(
+  expiredTemplate.allowed === true,
+  'Template send outside 24h window is permitted'
+);
+
+// 8.3 Non-template send INSIDE 24h window is allowed
+const validNonTemplate = CareWindowService.validateOutboundSend({
+  isTemplate: false,
+  lastInboundAt: tenHoursAgo,
+});
+assert(
+  validNonTemplate.allowed === true,
+  'Non-template send within 24h window is permitted'
+);
+
+// 8.4 Window resets on each new inbound message
+const resetTimestamp = new Date().toISOString();
+const resetCheck = CareWindowService.validateOutboundSend({
+  isTemplate: false,
+  lastInboundAt: resetTimestamp,
+});
+assert(
+  resetCheck.allowed === true,
+  'Window resets on new inbound message timestamp'
+);
+
+// ============================================================================
+// Group 9: Free Entry Point (FEP) 72h Window Mechanics
+// ============================================================================
+console.log('\n--- Test Group 9: Free Entry Point (FEP) Mechanics ---');
+
+const fepActiveExpiry = new Date(nowMs + 47 * 60 * 60 * 1000).toISOString(); // Active 72h FEP
+
+// 9.1 FEP NEVER permits free-form sends after 24h window has closed
+const fepFreeformAttempt = CareWindowService.validateOutboundSend({
+  isTemplate: false,
+  lastInboundAt: twentyFiveHoursAgo,
+  fepExpiresAt: fepActiveExpiry,
+});
+assert(
+  fepFreeformAttempt.allowed === false &&
+  fepFreeformAttempt.code === 'WINDOW_CLOSED',
+  'FEP referral NEVER permits free-form sends after 24h care window expires'
+);
+
+// 9.2 FEP correctly flags message for COST attribution
+const isCostFree = CareWindowService.isFepFree({
+  fepExpiresAt: fepActiveExpiry,
+});
+assert(
+  isCostFree === true,
+  'FEP active window accurately flags conversation for zero-cost attribution'
+);
+
+// 9.3 Expired FEP is not free
+const expiredFep = new Date(nowMs - 2 * 60 * 60 * 1000).toISOString();
+assert(
+  CareWindowService.isFepFree({ fepExpiresAt: expiredFep }) === false,
+  'Expired FEP is correctly marked non-free'
+);
+
+// ============================================================================
+// Group 10: Campaign Chunking & Crash Resumption (5,000 Recipients)
+// ============================================================================
+console.log('\n--- Test Group 10: Campaign Chunking & Resumption (5,000 Recipients) ---');
+
+// Generate 5,000 mock recipients
+const largeRecipientList = [];
+for (let i = 1; i <= 5000; i++) {
+  largeRecipientList.push({
+    id: `rec_${i}`,
+    phoneNumber: `+1415555${String(i).padStart(4, '0')}`,
+    optStatus: 'opted_in',
+    status: 'pending',
+  });
+}
+
+// 10.1 Chunked processing with batchSize = 50
+const batchSize = 50;
+const firstBatchResult = OutboundQueue.processBatch(largeRecipientList, {
+  batchSize,
+  maxBatches: 2, // Process 100 recipients (2 chunks)
+});
+
+assert(
+  firstBatchResult.processedCount === 100 &&
+  firstBatchResult.remainingCount === 4900,
+  '5,000-recipient campaign processes in chunks (2 batches of 50 = 100 processed)'
+);
+
+// 10.2 Simulated crash & resumption
+// Simulate crash by creating a new queue worker on the same list state
+const resumedBatchResult = OutboundQueue.processBatch(largeRecipientList, {
+  batchSize,
+  maxBatches: 1, // Resume and process next batch
+});
+
+assert(
+  resumedBatchResult.startIndex === 100 &&
+  resumedBatchResult.processedCount === 50 &&
+  resumedBatchResult.remainingCount === 4850,
+  'Campaign resumes correctly after simulated crash without re-sending processed recipients'
+);
+
+// ============================================================================
+// Group 11: Opt-Out Contact Skipping
+// ============================================================================
+console.log('\n--- Test Group 11: Opt-Out Contact Skipping ---');
+
+const mixedOptList = [
+  { id: 'opt_1', phoneNumber: '+1001', optStatus: 'opted_in', status: 'pending' },
+  { id: 'opt_2', phoneNumber: '+1002', optStatus: 'opted_in', status: 'pending' },
+  { id: 'opt_3', phoneNumber: '+1003', optStatus: 'unknown', status: 'pending' },
+  { id: 'opt_4', phoneNumber: '+1004', optStatus: 'opted_out', status: 'pending' },
+  { id: 'opt_5', phoneNumber: '+1005', optStatus: 'opted_out', status: 'pending' },
+];
+
+const optRunResult = OutboundQueue.processBatch(mixedOptList, { batchSize: 10 });
+assert(
+  optRunResult.sentCount === 3 &&
+  optRunResult.skippedCount === 2 &&
+  mixedOptList[3].status === 'skipped' &&
+  mixedOptList[4].status === 'skipped',
+  'Opted-out contacts are skipped, status set to "skipped", and skip counts reported accurately'
+);
+
+// ============================================================================
+// Group 12: Per-Number Rate Limiting
+// ============================================================================
+console.log('\n--- Test Group 12: Per-Number Rate Limiter ---');
+
+const rateLimiter = OutboundQueue.createRateLimiter({ maxMessagesPerSecond: 80 });
+assert(
+  rateLimiter.isAllowed() === true,
+  'Initial message dispatch allowed within rate limit'
+);
+
+// Simulate burst consumption
+let burstAllowed = true;
+for (let i = 0; i < 80; i++) {
+  rateLimiter.consume();
+}
+// 81st message in same second should trigger throttle
+const throttled = !rateLimiter.isAllowed();
+assert(
+  throttled === true,
+  'Per-number rate limit (80 MPS) is strictly respected, throttling excess burst'
+);
+
+// ============================================================================
+// Group 13: Meta Error Mapping & Exponential Backoff
+// ============================================================================
+console.log('\n--- Test Group 13: Meta Error Mapping & Retry Guidance ---');
+
+// 13.1 Rate limit error 130429 -> retryable with backoff
+const rateLimitErr = MetaErrorMapper.mapError(130429);
+assert(
+  rateLimitErr.isRetryable === true &&
+  rateLimitErr.retryDelayMs > 0 &&
+  rateLimitErr.userMessage.includes('Rate limit'),
+  'Code 130429 mapped to retryable with exponential backoff'
+);
+
+// 13.2 Pair rate limit 131056 -> retryable with 60s delay
+const pairRateErr = MetaErrorMapper.mapError(131056);
+assert(
+  pairRateErr.isRetryable === true &&
+  pairRateErr.retryDelayMs >= 60000,
+  'Code 131056 mapped to pair rate limit retry rule'
+);
+
+// 13.3 Care window closed 131047 -> permanent failure, NO retry
+const windowErr = MetaErrorMapper.mapError(131047);
+assert(
+  windowErr.isRetryable === false &&
+  windowErr.userMessage.includes('24 hours'),
+  'Code 131047 mapped to permanent failure (no retry, switch to template)'
+);
+
+// 13.4 Undeliverable 131026 -> permanent failure, NO retry
+const undeliverableErr = MetaErrorMapper.mapError(131026);
+assert(
+  undeliverableErr.isRetryable === false,
+  'Code 131026 mapped to permanent failure'
+);
+
+// 13.5 Auth token expired 190 -> permanent failure, NO retry
+const authErr = MetaErrorMapper.mapError(190);
+assert(
+  authErr.isRetryable === false &&
+  authErr.actionRequired === 'REFRESH_TOKEN',
+  'Code 190 mapped to auth revoked alert rule'
+);
+
+// ============================================================================
 // Final Summary
 // ============================================================================
 console.log(`\n======================================================`);
 console.log(`Test Results: ${passedTests}/${totalTests} tests passed (${Math.round((passedTests / totalTests) * 100)}%)`);
 if (passedTests === totalTests) {
-  console.log(`Phase 1A Webhook Verification Completed Successfully! 🚀`);
+  console.log(`Phase 1B Outbound & Queue Verification Completed Successfully! 🚀`);
 } else {
-  console.error(`❌ Some tests failed in Phase 1A verification.`);
+  console.error(`❌ Some tests failed in Phase 1B verification.`);
   process.exitCode = 1;
 }
 console.log(`======================================================\n`);
