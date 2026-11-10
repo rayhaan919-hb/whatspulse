@@ -1,9 +1,25 @@
 // End-to-End Automated Verification Script for WhatsPulse CRM
-// Tests Webhook Verification, Inbound Message Ingestion, Status Receipts, and AI Copilot Logic
+// Phase 1A: Reliability & Security Test Suite
+// Run with: node test-e2e.mjs
 
+import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 
-console.log('🚀 Starting WhatsPulse CRM E2E Verification Suite...\n');
+// Re-exec with --experimental-strip-types in Node 22 if not already active
+if (!process.execArgv.includes('--experimental-strip-types')) {
+  const { spawnSync } = await import('child_process');
+  const scriptPath = fileURLToPath(import.meta.url);
+  const result = spawnSync(process.execPath, ['--experimental-strip-types', scriptPath, ...process.argv.slice(2)], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  process.exit(result.status ?? 1);
+}
+
+// Dynamic import after strip-types is guaranteed active
+const { WebhookProcessor } = await import('./src/lib/whatsapp/webhook.ts');
+
+console.log('🚀 Starting WhatsPulse CRM Phase 1A Automated Test Suite...\n');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -19,127 +35,364 @@ function assert(condition, testName) {
   }
 }
 
-// ----------------------------------------------------------------------------
-// Test 1: HMAC SHA-256 Signature Verification
-// ----------------------------------------------------------------------------
-console.log('--- Test Group 1: Meta Webhook Security Verification ---');
-const secret = 'test_app_secret_abc123';
-const sampleBody = JSON.stringify({ event: 'test_message', timestamp: 1731234567 });
-const hmac = crypto.createHmac('sha256', secret);
-const signature = `sha256=${hmac.update(sampleBody).digest('hex')}`;
+// ============================================================================
+// Group 1: HMAC SHA-256 Signature Verification & Edge Cases
+// ============================================================================
+console.log('--- Test Group 1: Meta Webhook Security & Signature Edge Cases ---');
+const testSecret = 'secret_test_key_phase1a_987654321';
+const validPayload = JSON.stringify({ entry: [{ id: '109847291823749' }] });
+const validHmac = crypto.createHmac('sha256', testSecret).update(validPayload).digest('hex');
+const validHeader = `sha256=${validHmac}`;
 
-// Verify signature matching
-const calcHmac = crypto.createHmac('sha256', secret).update(sampleBody).digest('hex');
-const expected = signature.substring(7);
-const isValid = crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(calcHmac, 'hex'));
-assert(isValid, 'Meta HMAC SHA-256 signature verification passes');
+// 1.1 Valid signature is accepted
+assert(
+  WebhookProcessor.verifySignature(validPayload, validHeader, testSecret) === true,
+  'Valid HMAC signature accepted'
+);
 
-// Negative check: Tampered body
-const tamperedBody = JSON.stringify({ event: 'tampered_event' });
-const tamperedHmac = crypto.createHmac('sha256', secret).update(tamperedBody).digest('hex');
-const isTamperedValid = crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(tamperedHmac, 'hex'));
-assert(!isTamperedValid, 'Tampered webhook payload correctly rejected');
+// 1.2 Tampered payload is rejected
+const tamperedPayload = JSON.stringify({ entry: [{ id: '109847291823749', tampered: true }] });
+assert(
+  WebhookProcessor.verifySignature(tamperedPayload, validHeader, testSecret) === false,
+  'Tampered payload rejected'
+);
 
-// ----------------------------------------------------------------------------
-// Test 2: Webhook Subscription Handshake (GET /api/webhooks/whatsapp)
-// ----------------------------------------------------------------------------
+// 1.3 Missing signature header is rejected
+assert(
+  WebhookProcessor.verifySignature(validPayload, null, testSecret) === false,
+  'Missing signature header (null) is rejected'
+);
+assert(
+  WebhookProcessor.verifySignature(validPayload, undefined, testSecret) === false,
+  'Missing signature header (undefined) is rejected'
+);
+
+// 1.4 Missing appSecret is rejected (never allow silent bypass)
+assert(
+  WebhookProcessor.verifySignature(validPayload, validHeader, '') === false,
+  'Empty appSecret rejected'
+);
+assert(
+  WebhookProcessor.verifySignature(validPayload, validHeader, undefined) === false,
+  'Undefined appSecret rejected'
+);
+
+// 1.5 Malformed header prefixes
+assert(
+  WebhookProcessor.verifySignature(validPayload, `sha1=${validHmac}`, testSecret) === false,
+  'Non-sha256 prefix rejected'
+);
+assert(
+  WebhookProcessor.verifySignature(validPayload, 'malformed_header_string', testSecret) === false,
+  'Header without prefix rejected'
+);
+assert(
+  WebhookProcessor.verifySignature(validPayload, 'sha256=', testSecret) === false,
+  'Empty sha256 hex digest rejected'
+);
+
+// 1.6 Hex length mismatch MUST NOT throw RangeError in timingSafeEqual
+assert(
+  WebhookProcessor.verifySignature(validPayload, 'sha256=1234abcd', testSecret) === false,
+  'Truncated hex signature rejected safely without timingSafeEqual throwing'
+);
+assert(
+  WebhookProcessor.verifySignature(validPayload, `sha256=${validHmac}extra00`, testSecret) === false,
+  'Oversized hex signature rejected safely without timingSafeEqual throwing'
+);
+
+// ============================================================================
+// Group 2: Webhook Subscription Handshake (GET /api/webhooks/whatsapp)
+// ============================================================================
 console.log('\n--- Test Group 2: Webhook Subscription Handshake ---');
-const verifyToken = 'whatspulse_secret_token_123';
-const mode = 'subscribe';
-const challenge = '1158201444';
+const expectedVerifyToken = 'whatspulse_secret_token_123';
+const challengeCode = '1158201444';
 
-function verifySubscription(m, tok, chal, secretTok) {
-  if (m === 'subscribe' && tok === secretTok && chal) {
-    return { isValid: true, challenge: chal };
-  }
-  return { isValid: false };
-}
+const validHandshake = WebhookProcessor.verifySubscription(
+  'subscribe',
+  expectedVerifyToken,
+  challengeCode,
+  expectedVerifyToken
+);
+assert(
+  validHandshake.isValid === true && validHandshake.challenge === challengeCode,
+  'Meta GET webhook subscription challenge returns challenge'
+);
 
-const handshakeValid = verifySubscription(mode, verifyToken, challenge, verifyToken);
-assert(handshakeValid.isValid && handshakeValid.challenge === '1158201444', 'Meta GET webhook subscription challenge returns challenge');
+const invalidTokenHandshake = WebhookProcessor.verifySubscription(
+  'subscribe',
+  'invalid_token_xyz',
+  challengeCode,
+  expectedVerifyToken
+);
+assert(
+  invalidTokenHandshake.isValid === false,
+  'Invalid verify token rejected'
+);
 
-const handshakeInvalid = verifySubscription('subscribe', 'wrong_token', challenge, verifyToken);
-assert(!handshakeInvalid.isValid, 'Invalid verify token rejected with HTTP 403');
+const invalidModeHandshake = WebhookProcessor.verifySubscription(
+  'unsubscribe',
+  expectedVerifyToken,
+  challengeCode,
+  expectedVerifyToken
+);
+assert(
+  invalidModeHandshake.isValid === false,
+  'Invalid hub.mode rejected'
+);
 
-// ----------------------------------------------------------------------------
-// Test 3: Incoming Message Payload Parser
-// ----------------------------------------------------------------------------
-console.log('\n--- Test Group 3: WhatsApp Cloud API Message Parsing ---');
-const mockPayload = {
-  object: 'whatsapp_business_account',
-  entry: [
-    {
-      id: '298374918237491',
-      changes: [
-        {
-          value: {
-            messaging_product: 'whatsapp',
-            metadata: {
-              display_phone_number: '+1 (555) 019-2834',
-              phone_number_id: '109847291823749',
-            },
-            contacts: [
-              {
-                profile: { name: 'Elena Rostova' },
-                wa_id: '14155552671',
-              },
-            ],
-            messages: [
-              {
-                from: '14155552671',
-                id: 'wamid.HBgLTEST999',
-                timestamp: '1731234567',
-                type: 'text',
-                text: { body: 'Inquiring about enterprise wholesale tier.' },
-              },
-            ],
-            statuses: [
-              {
-                id: 'wamid.HBgLOUTBOUND123',
-                status: 'read',
-                timestamp: '1731234599',
-                recipient_id: '14155552671',
-              },
-            ],
-          },
-          field: 'messages',
-        },
-      ],
-    },
-  ],
+// ============================================================================
+// Group 3: Multi-Tenant Routing & Tenant Resolution
+// ============================================================================
+console.log('\n--- Test Group 3: Multi-Tenant Routing & Isolation ---');
+
+const mockTenants = [
+  {
+    workspaceId: 'ws_tenant_alpha',
+    phoneNumberId: 'phone_id_alpha_111',
+    pathToken: 'token_alpha_xyz',
+    appSecret: 'secret_alpha_001',
+    webhookVerifyToken: 'verify_alpha_001',
+  },
+  {
+    workspaceId: 'ws_tenant_beta',
+    phoneNumberId: 'phone_id_beta_222',
+    pathToken: 'token_beta_abc',
+    appSecret: 'secret_beta_002',
+    webhookVerifyToken: 'verify_beta_002',
+  },
+];
+
+// 3.1 Resolve by phone_number_id
+const resolvedAlpha = WebhookProcessor.resolveTenant(
+  { phoneNumberId: 'phone_id_alpha_111' },
+  mockTenants
+);
+assert(
+  resolvedAlpha !== null && resolvedAlpha.workspaceId === 'ws_tenant_alpha' && resolvedAlpha.appSecret === 'secret_alpha_001',
+  'Tenant resolved correctly by phone_number_id'
+);
+
+// 3.2 Resolve by path token
+const resolvedBeta = WebhookProcessor.resolveTenant(
+  { pathToken: 'token_beta_abc' },
+  mockTenants
+);
+assert(
+  resolvedBeta !== null && resolvedBeta.workspaceId === 'ws_tenant_beta' && resolvedBeta.appSecret === 'secret_beta_002',
+  'Tenant resolved correctly by path token'
+);
+
+// 3.3 Unknown tenant returns null without leaking details
+const unknownTenant = WebhookProcessor.resolveTenant(
+  { phoneNumberId: 'unknown_phone_999' },
+  mockTenants
+);
+assert(
+  unknownTenant === null,
+  'Unknown tenant returns null without leaking internal credentials'
+);
+
+// ============================================================================
+// Group 4: Webhook Idempotency (Duplicate wamid Ingestion)
+// ============================================================================
+console.log('\n--- Test Group 4: Webhook Idempotency (Duplicate Deliveries) ---');
+
+const messageStore = [];
+const pendingStatusStore = [];
+
+const incomingMsgPayload = {
+  from: '+14155552671',
+  name: 'Marcus Vance',
+  messageId: 'wamid.HBgL_IDEMPOTENCY_TEST_001',
+  timestamp: new Date().toISOString(),
+  type: 'text',
+  body: 'Testing idempotency on duplicate webhook deliveries.',
 };
 
-const entryVal = mockPayload.entry[0].changes[0].value;
-const parsedMsg = entryVal.messages[0];
-assert(parsedMsg.id === 'wamid.HBgLTEST999', 'Parsed incoming wamid correctly');
-assert(parsedMsg.text.body === 'Inquiring about enterprise wholesale tier.', 'Extracted message body text');
-assert(entryVal.statuses[0].status === 'read', 'Parsed delivery status update (read/blue ticks)');
+// First delivery
+const firstResult = WebhookProcessor.processIncomingMessage(
+  'ws_tenant_alpha',
+  incomingMsgPayload,
+  messageStore,
+  pendingStatusStore
+);
+assert(
+  firstResult.deduplicated === false && messageStore.length === 1,
+  'First delivery of wamid successfully creates message row'
+);
 
-// ----------------------------------------------------------------------------
-// Test 4: AI Heuristics & Response Suggestion Tests
-// ----------------------------------------------------------------------------
-console.log('\n--- Test Group 4: AI Copilot Contextual Response Tests ---');
-function suggestRepliesHeuristic(lastMsg, contactName) {
-  const lower = lastMsg.toLowerCase();
-  if (lower.includes('delay') || lower.includes('shipping') || lower.includes('customs')) {
-    return { tone: 'empathetic', action: 'Track Logistics' };
-  } else if (lower.includes('price') || lower.includes('wholesale') || lower.includes('tier')) {
-    return { tone: 'sales_focused', action: 'Generate Quote' };
-  }
-  return { tone: 'professional', action: 'General Assist' };
-}
+// Duplicate delivery with same wamid
+const secondResult = WebhookProcessor.processIncomingMessage(
+  'ws_tenant_alpha',
+  incomingMsgPayload,
+  messageStore,
+  pendingStatusStore
+);
+assert(
+  secondResult.deduplicated === true && messageStore.length === 1,
+  'Duplicate delivery of identical wamid is a no-op (exactly 1 message row remains)'
+);
 
-const salesResponse = suggestRepliesHeuristic('Inquiring about enterprise wholesale tier.', 'Elena');
-assert(salesResponse.tone === 'sales_focused', 'AI classifies wholesale query as sales_focused');
-assert(salesResponse.action === 'Generate Quote', 'AI suggests Generate Quote quick action');
+// ============================================================================
+// Group 5: Monotonic Status Ordering (Never Downgrade Status)
+// ============================================================================
+console.log('\n--- Test Group 5: Monotonic Status Ranking ---');
 
-const supportResponse = suggestRepliesHeuristic('Customs delay with package delivery', 'Marcus');
-assert(supportResponse.tone === 'empathetic', 'AI classifies delivery delay as empathetic support');
+// 5.1 Progression sent -> delivered -> read
+assert(
+  WebhookProcessor.canTransitionStatus('sent', 'delivered') === true,
+  'Status can progress: sent -> delivered'
+);
+assert(
+  WebhookProcessor.canTransitionStatus('delivered', 'read') === true,
+  'Status can progress: delivered -> read'
+);
 
-// ----------------------------------------------------------------------------
+// 5.2 Out-of-order delivery: "read" arriving before "delivered" does NOT downgrade
+assert(
+  WebhookProcessor.canTransitionStatus('read', 'delivered') === false,
+  'Out-of-order check: read -> delivered is rejected (status cannot downgrade)'
+);
+assert(
+  WebhookProcessor.canTransitionStatus('read', 'sent') === false,
+  'Out-of-order check: read -> sent is rejected'
+);
+
+// 5.3 Apply out-of-order update to stored message
+const monotonicMsg = {
+  id: 'msg_monotonic_01',
+  conversationId: 'conv_01',
+  workspaceId: 'ws_tenant_alpha',
+  waMessageId: 'wamid.HBgL_MONOTONIC_TEST_002',
+  status: 'read',
+  content: 'Monotonic test message',
+};
+const storeForMonotonic = [monotonicMsg];
+
+const downgradeAttempt = WebhookProcessor.processStatusUpdate(
+  'ws_tenant_alpha',
+  {
+    messageId: 'wamid.HBgL_MONOTONIC_TEST_002',
+    recipientId: '+14155552671',
+    status: 'delivered',
+    timestamp: new Date().toISOString(),
+  },
+  storeForMonotonic,
+  []
+);
+assert(
+  downgradeAttempt.applied === false && storeForMonotonic[0].status === 'read',
+  'Stored message status stays "read" when subsequent "delivered" arrives out-of-order'
+);
+
+// ============================================================================
+// Group 6: Early Status Arrival (Status Arriving Before Message Row Exists)
+// ============================================================================
+console.log('\n--- Test Group 6: Early Status Arrival & Pending Status Resolution ---');
+
+const earlyStatusStore = [];
+const earlyPendingStatuses = [];
+
+const earlyWamid = 'wamid.HBgL_EARLY_STATUS_TEST_003';
+
+// 6.1 Status arrives FIRST (message does not exist yet)
+const earlyStatusResult = WebhookProcessor.processStatusUpdate(
+  'ws_tenant_alpha',
+  {
+    messageId: earlyWamid,
+    recipientId: '+14155552671',
+    status: 'read',
+    timestamp: new Date().toISOString(),
+  },
+  earlyStatusStore,
+  earlyPendingStatuses
+);
+assert(
+  earlyStatusResult.applied === false &&
+  earlyStatusResult.pending === true &&
+  earlyPendingStatuses.length === 1 &&
+  earlyPendingStatuses[0].waMessageId === earlyWamid,
+  'Status arriving before message is stored in pending_statuses'
+);
+
+// 6.2 Message arrives LATER -> Pending status is immediately resolved & applied
+const lateMessagePayload = {
+  from: '+14155552671',
+  name: 'Marcus Vance',
+  messageId: earlyWamid,
+  timestamp: new Date().toISOString(),
+  type: 'text',
+  body: 'Delayed message arriving after its read receipt.',
+};
+
+const lateMessageResult = WebhookProcessor.processIncomingMessage(
+  'ws_tenant_alpha',
+  lateMessagePayload,
+  earlyStatusStore,
+  earlyPendingStatuses
+);
+
+assert(
+  lateMessageResult.message.status === 'read',
+  'Late-arriving message immediately inherits the pending "read" status'
+);
+assert(
+  earlyPendingStatuses[0].isApplied === true,
+  'Pending status marked as applied once message row exists'
+);
+
+// ============================================================================
+// Group 7: Error Code Storage on Failed Statuses
+// ============================================================================
+console.log('\n--- Test Group 7: Error Code Storage on Failed Statuses ---');
+
+const failedMsgWamid = 'wamid.HBgL_FAIL_TEST_004';
+const failedMsgStore = [
+  {
+    id: 'msg_fail_01',
+    conversationId: 'conv_01',
+    workspaceId: 'ws_tenant_alpha',
+    waMessageId: failedMsgWamid,
+    status: 'sent',
+    content: 'Failing message test',
+  },
+];
+
+const failUpdate = WebhookProcessor.processStatusUpdate(
+  'ws_tenant_alpha',
+  {
+    messageId: failedMsgWamid,
+    recipientId: '+14155552671',
+    status: 'failed',
+    timestamp: new Date().toISOString(),
+    error: {
+      code: 131047,
+      title: 'Message failed to send',
+      message: 'More than 24 hours have passed since the customer last replied',
+    },
+  },
+  failedMsgStore,
+  []
+);
+
+assert(
+  failUpdate.applied === true &&
+  failedMsgStore[0].status === 'failed' &&
+  failedMsgStore[0].errorCode === 131047 &&
+  failedMsgStore[0].errorDetails?.code === 131047,
+  'Failed status update records error code 131047 and error details on the message'
+);
+
+// ============================================================================
 // Final Summary
-// ----------------------------------------------------------------------------
+// ============================================================================
 console.log(`\n======================================================`);
 console.log(`Test Results: ${passedTests}/${totalTests} tests passed (${Math.round((passedTests / totalTests) * 100)}%)`);
-console.log(`WhatsPulse CRM E2E Verification Completed Successfully! 🚀`);
+if (passedTests === totalTests) {
+  console.log(`Phase 1A Webhook Verification Completed Successfully! 🚀`);
+} else {
+  console.error(`❌ Some tests failed in Phase 1A verification.`);
+  process.exitCode = 1;
+}
 console.log(`======================================================\n`);
