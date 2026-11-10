@@ -16,15 +16,15 @@ export class TenantResolver {
     // 1. Primary workspace configured via environment variables
     const envPhoneNumberId = process.env.META_PHONE_NUMBER_ID;
     const envAppSecret = process.env.META_APP_SECRET;
-    const envVerifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'whatspulse_secret_token_123';
+    const envVerifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
 
     if (envAppSecret) {
       tenants.push({
         workspaceId: process.env.DEFAULT_WORKSPACE_ID || 'ws_prod_01',
-        phoneNumberId: envPhoneNumberId || '109847291823749',
+        phoneNumberId: envPhoneNumberId || '',
         pathToken: process.env.DEFAULT_WORKSPACE_PATH_TOKEN || 'default',
         appSecret: envAppSecret,
-        webhookVerifyToken: envVerifyToken,
+        webhookVerifyToken: envVerifyToken || '',
       });
     }
 
@@ -34,7 +34,7 @@ export class TenantResolver {
         workspaceId: DEMO_WABA_CONFIG.workspaceId,
         phoneNumberId: DEMO_WABA_CONFIG.phoneNumberId,
         pathToken: 'demo',
-        appSecret: process.env.META_APP_SECRET || 'whatspulse_demo_secret_2026',
+        appSecret: process.env.META_APP_SECRET || '',
         webhookVerifyToken: DEMO_WABA_CONFIG.webhookVerifyToken,
       });
     }
@@ -43,10 +43,10 @@ export class TenantResolver {
     if (!tenants.some((t) => t.workspaceId === CLEAN_WABA_CONFIG.workspaceId)) {
       tenants.push({
         workspaceId: CLEAN_WABA_CONFIG.workspaceId,
-        phoneNumberId: CLEAN_WABA_CONFIG.phoneNumberId || '109847291823749',
+        phoneNumberId: CLEAN_WABA_CONFIG.phoneNumberId || '',
         pathToken: 'prod',
-        appSecret: envAppSecret || 'whatspulse_dev_secret_fallback',
-        webhookVerifyToken: CLEAN_WABA_CONFIG.webhookVerifyToken,
+        appSecret: envAppSecret || '',
+        webhookVerifyToken: CLEAN_WABA_CONFIG.webhookVerifyToken || '',
       });
     }
 

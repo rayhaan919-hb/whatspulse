@@ -9,7 +9,7 @@ import { TenantResolver } from '@/lib/whatsapp/tenants';
 import { WebhookEventQueue } from '@/lib/whatsapp/event-queue';
 import type { MetaWebhookPayload } from '@/types/crm';
 
-const DEFAULT_VERIFY_TOKEN = process.env.META_WEBHOOK_VERIFY_TOKEN || 'whatspulse_secret_token_123';
+const DEFAULT_VERIFY_TOKEN = process.env.META_WEBHOOK_VERIFY_TOKEN || '';
 
 /**
  * GET Handler — Meta Webhook Verification Handshake

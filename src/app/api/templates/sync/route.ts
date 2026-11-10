@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const { workspaceId = 'ws_prod_01', pathToken } = body;
 
     const tenant = TenantResolver.resolve({ pathToken });
-    const wabaId = process.env.META_WABA_ID || '298374918237491';
+    const wabaId = process.env.META_WABA_ID || '';
     const accessToken = process.env.META_ACCESS_TOKEN;
 
     // In demo or test mode when no live Graph API token is configured

@@ -88,7 +88,7 @@ export const CLEAN_WABA_CONFIG: WABAConfig = {
   wabaId: '',
   displayPhoneNumber: '',
   accessToken: '',
-  webhookVerifyToken: 'whatspulse_secret_token_123',
+  webhookVerifyToken: '',
   qualityRating: 'GREEN',
   isActive: false,
 };
