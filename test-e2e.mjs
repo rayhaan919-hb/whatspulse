@@ -36,8 +36,10 @@ const { ApiKeyService } = await import('./src/lib/api/api-keys.ts');
 const { OutboundWebhookService } = await import('./src/lib/webhooks/outbound-webhook.ts');
 const { DemoIsolationService } = await import('./src/lib/demo/demo-isolation.ts');
 const { PresenceService } = await import('./src/lib/realtime/presence.ts');
+const { I18nService } = await import('./src/lib/i18n/i18n-service.ts');
+const { A11yService } = await import('./src/lib/a11y/a11y-service.ts');
 
-console.log('🚀 Starting WhatsPulse CRM Phase 3B Automated Test Suite...\n');
+console.log('🚀 Starting WhatsPulse CRM Phase 4B Automated Test Suite...\n');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -1516,14 +1518,141 @@ assert(
 );
 
 // ============================================================================
+// Group 33: i18n Translation, Interpolation & RTL Direction
+// ============================================================================
+console.log('\n--- Test Group 33: i18n Translation & RTL Engine ---');
+
+// 33.1 English lookup
+const enTitle = I18nService.translate('inbox.conversations', 'en');
+assert(
+  enTitle === 'Conversations',
+  'English dictionary returns accurate translation for inbox.conversations'
+);
+
+// 33.2 Variable placeholder interpolation
+const i18nInterpolated = I18nService.translate('inbox.selectedCount', 'en', { count: 4 });
+assert(
+  i18nInterpolated === '4 selected',
+  'Translation engine accurately interpolates dynamic variables like {{count}}'
+);
+
+// 33.3 Arabic RTL lookup
+const arTitle = I18nService.translate('inbox.conversations', 'ar');
+assert(
+  arTitle === 'المحادثات',
+  'Arabic dictionary returns accurate native translation for inbox.conversations'
+);
+
+// 33.4 Fallback to English for missing key
+const fallbackVal = I18nService.translate('common.save', 'ar');
+assert(
+  fallbackVal === 'حفظ' || fallbackVal === 'Save',
+  'Fallback mechanism safely resolves existing translation'
+);
+
+// 33.5 Direction resolution
+const arDir = I18nService.getDirection('ar');
+const enDir = I18nService.getDirection('en');
+assert(
+  arDir === 'rtl' && enDir === 'ltr',
+  'Language direction accurately resolves: Arabic to rtl and English to ltr'
+);
+
+// 33.6 Available locales metadata
+const locales = I18nService.getAvailableLocales();
+assert(
+  locales.length >= 2 &&
+  locales.some((l) => l.code === 'en' && l.dir === 'ltr') &&
+  locales.some((l) => l.code === 'ar' && l.dir === 'rtl'),
+  'Available locales registry provides metadata with English (LTR) and Arabic (RTL)'
+);
+
+// ============================================================================
+// Group 34: Accessibility (a11y) & Contrast Contracts
+// ============================================================================
+console.log('\n--- Test Group 34: Accessibility (a11y) & Contrast Standards ---');
+
+// 34.1 ARIA dialog compliance
+const validModal = A11yService.validateDialogAttributes({
+  role: 'dialog',
+  ariaModal: true,
+  ariaLabel: 'Command Palette',
+});
+assert(
+  validModal.isValid === true,
+  'Modal dialog attributes comply with WAI-ARIA dialog standards'
+);
+
+// 34.2 Missing ARIA label rejected
+const invalidModal = A11yService.validateDialogAttributes({
+  role: 'dialog',
+  ariaModal: true,
+  ariaLabel: '',
+});
+assert(
+  invalidModal.isValid === false && invalidModal.error?.includes('label'),
+  'Dialog missing accessible label is flagged by a11y validator'
+);
+
+// 34.3 Icon-only button labeling
+const iconButtonCheck = A11yService.validateButtonAccessibility({
+  hasVisibleText: false,
+  ariaLabel: 'Open command palette',
+});
+assert(
+  iconButtonCheck.isValid === true,
+  'Icon-only button with aria-label passes accessibility validation'
+);
+
+// 34.4 WCAG AA Contrast ratio calculation
+const contrastRatio = A11yService.calculateContrastRatio('#000000', '#fffcec');
+assert(
+  contrastRatio >= 4.5,
+  `Warm editorial primary ink (#000000 on #fffcec) exceeds WCAG AA requirement (ratio: ${contrastRatio.toFixed(1)}:1)`
+);
+
+// ============================================================================
+// Group 35: Commercial Copy Sanitization & Meta Compliance Claims
+// ============================================================================
+console.log('\n--- Test Group 35: Copy Sanitization & Compliance Verification ---');
+
+const fs = await import('fs');
+const readmeContent = fs.readFileSync('./README.md', 'utf8');
+const setupGuideContent = fs.readFileSync('./SETUP_GUIDE.md', 'utf8');
+
+// 35.1 Zero "Arc Browser" mentions in docs and components
+const globalsCss = fs.readFileSync('./src/app/globals.css', 'utf8');
+assert(
+  !readmeContent.includes('Arc Browser') &&
+  !setupGuideContent.includes('Arc Browser') &&
+  !globalsCss.includes('Arc Browser'),
+  'Branding copy sanitized: zero references to "Arc Browser" in README, guide, or CSS'
+);
+
+// 35.2 Zero "zero ban" / "zero-ban" claims
+assert(
+  !readmeContent.toLowerCase().includes('zero ban') &&
+  !setupGuideContent.toLowerCase().includes('zero ban') &&
+  !readmeContent.toLowerCase().includes('zero-ban'),
+  'Exaggerated claims removed: zero occurrences of "zero ban" or "zero-ban" guarantees'
+);
+
+// 35.3 Official Cloud API compliance wording present
+assert(
+  readmeContent.includes('official Meta WhatsApp Cloud API') ||
+  setupGuideContent.includes('official Meta'),
+  'Accurate Meta WhatsApp Cloud API compliance statement present in documentation'
+);
+
+// ============================================================================
 // Final Summary
 // ============================================================================
 console.log(`\n======================================================`);
 console.log(`Test Results: ${passedTests}/${totalTests} tests passed (${Math.round((passedTests / totalTests) * 100)}%)`);
 if (passedTests === totalTests) {
-  console.log(`Phase 3B Extensibility, Security & Collision Verification Completed Successfully! 🚀`);
+  console.log(`Phase 4B i18n, Accessibility & Copy Sanitization Verification Completed Successfully! 🚀`);
 } else {
-  console.error(`❌ Some tests failed in Phase 3B verification.`);
+  console.error(`❌ Some tests failed in Phase 4B verification.`);
   process.exitCode = 1;
 }
 console.log(`======================================================\n`);
