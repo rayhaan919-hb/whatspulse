@@ -39,3 +39,40 @@ This log tracks all completed stops, architectural decisions, migration records,
   - Outbound sending untouched as instructed (strictly scoped to Phase 1A webhook receiving).
 - **Status:** Complete / Ready for Review
 
+## [STOP 1B] Phase 1B — Outbound Sending, Care Window & Error Mapping
+- **Date / Timestamp:** 2026-11-11T03:34:00+05:00
+- **Git Branch:** `phase-1b-outbound`
+- **Files Changed:**
+  - `src/lib/whatsapp/care-window.ts` (Created CareWindowService: server-side 24h window calculation, FEP 72h cost-only attribution, countdown formatting)
+  - `src/lib/whatsapp/errors.ts` (Created MetaErrorMapper: central mapping of Meta codes 131047, 131049, 130429, 131056, 131026, 132000, 132001, 132012, 190 to human messages and retry policies)
+  - `src/lib/queue/outbound-queue.ts` (Created OutboundQueue: chunked batch runner, crash resumption, opt-out filtering, token-bucket per-number rate limiter, exponential backoff)
+  - `src/app/api/messages/send/route.ts` (Server-side 24h care window enforcement, structured error mapping)
+  - `src/app/api/cron/outbound-worker/route.ts` (Protected cron worker route with Vercel Cron and pg_cron documentation)
+  - `src/components/inbox/ChatWindow.tsx` (Conversation care window countdown chip, template-only composer locking when closed, failure bubble reason & retry button)
+  - `src/app/page.tsx` (Pass lastInboundAt/fepExpiresAt to send endpoint, update lastInboundAt on inbound messages, render failed message state)
+  - `src/lib/storage.ts` (Added lastInboundAt to demo conversations for open vs expired care window demonstration)
+  - `src/types/crm.ts` (Added OptStatus, OutboundJob, CampaignRecipient, lastInboundAt, fepExpiresAt)
+  - `test-e2e.mjs` (Added 17 new automated tests for Phase 1B, 45 total)
+- **Migrations Added:**
+  - `supabase/migrations/20261111_02_outbound_queue_and_window.sql` (Adds `contacts.opt_status`, `conversations.last_inbound_at`, `conversations.fep_expires_at`, creates `outbound_jobs` and `campaign_recipients` tables with `SKIP LOCKED` index)
+- **Environment Variables Added:**
+  - `CRON_SECRET` (Bearer token for authenticating `/api/cron/outbound-worker` cron jobs)
+- **Tests Added & Results:**
+  - Added 17 new automated test assertions to `test-e2e.mjs` (45 total):
+    - 24h customer care window: non-template send outside window rejected with code 131047 (`WINDOW_CLOSED`), template send permitted, within-window non-template permitted, window resets on inbound message
+    - Free Entry Point (FEP): 72h window sets `fep_expires_at` for cost attribution only, NEVER permits free-form sends after 24h
+    - Campaign chunking & resumption: 5,000-recipient batch processed in chunks, resumes after simulated crash without re-sending
+    - Opt-out filtering: contacts with `opt_status = 'opted_out'` are skipped and counted accurately
+    - Per-number rate limit: 80 MPS rate limiter throttles excess burst dispatches
+    - Meta error mapping: code 130429 & 131056 mapped to retryable with backoff, code 131047 & 131026 & 190 mapped to permanent failure
+  - TypeScript strict: PASS (`tsc --noEmit` exited 0)
+  - Next.js Turbopack build: PASS (8/8 routes compiled cleanly)
+  - E2E Tests: 45/45 passed (100%)
+- **// VERIFY Items:**
+  - Confirmed: FEP referral only discounts message billing to zero; freeform messaging clock remains strictly gated by 24h from last customer reply.
+  - Confirmed: Meta Cloud API default rate limit is 80 MPS per registered phone number.
+- **Skipped & Rationale:**
+  - Full opt-in/opt-out ledger tables and campaign compliance warnings are scheduled for Phase 2 as specified in prompt and `docs/IMPROVEMENT_PLAN.md`.
+- **Status:** Complete / Ready for Review
+
+
