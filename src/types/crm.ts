@@ -14,6 +14,8 @@ export interface Workspace {
   slug: string;
   plan: 'starter' | 'pro' | 'agency';
   createdAt: string;
+  autoAssignmentMode?: AutoAssignmentMode;
+  businessHours?: BusinessHoursConfig;
 }
 
 export interface WorkspaceMember {
@@ -189,6 +191,41 @@ export interface Conversation {
   lastInboundAt?: string;
   fepExpiresAt?: string;
   tags: string[];
+  labels?: string[];
+  snoozedUntil?: string | null;
+  lastAfterHoursReplyAt?: string | null;
+}
+
+export interface CannedReply {
+  id: string;
+  workspaceId: string;
+  shortcut: string;
+  title: string;
+  content: string;
+  category?: string;
+}
+
+export type AutoAssignmentMode = 'disabled' | 'round_robin' | 'least_loaded';
+
+export type BusinessHoursSchedule = Record<number, { open: string; close: string }>;
+
+export interface BusinessHoursConfig {
+  enabled: boolean;
+  timezone: string;
+  schedule: BusinessHoursSchedule;
+  autoReplyMessage: string;
+}
+
+export interface AgentNotification {
+  id: string;
+  workspaceId: string;
+  memberId: string;
+  conversationId?: string;
+  senderName?: string;
+  title: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 export interface OutboundJob {
