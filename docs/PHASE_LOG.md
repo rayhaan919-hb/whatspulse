@@ -75,4 +75,46 @@ This log tracks all completed stops, architectural decisions, migration records,
   - Full opt-in/opt-out ledger tables and campaign compliance warnings are scheduled for Phase 2 as specified in prompt and `docs/IMPROVEMENT_PLAN.md`.
 - **Status:** Complete / Ready for Review
 
-
+## [STOP 1C] Phase 1C — Templates, Secrets Encryption at Rest, Media Storage & DB Performance
+- **Date / Timestamp:** 2026-11-11T03:45:00+05:00
+- **Git Branch:** `phase-1c-templates-secrets`
+- **Files Changed:**
+  - `src/lib/whatsapp/crypto.ts` (Created CryptoService: AES-256-GCM encryption/decryption with key version prefix `v1:`, multi-version keyring support for zero-downtime rotation, RLS role contract validation, secret masking helper)
+  - `src/lib/whatsapp/template-validator.ts` (Created TemplateValidator: pre-flight template parameter validator checking parameter counts, empty/whitespace strings, header media URLs, button parameters before hitting Meta Cloud API; formats Meta components)
+  - `src/lib/whatsapp/media.ts` (Created MediaStorageService: validates size limits [16MB for image/audio, 100MB for video/doc], downloads from Graph API, stores in Supabase Storage path, returns signed URL)
+  - `src/app/api/templates/sync/route.ts` (Created template sync endpoint from Meta Graph API v20+; stores template category affecting billing, extracts variables and quality score)
+  - `src/app/api/messages/send/route.ts` (Pre-flight validation of template parameters before calling Meta API)
+  - `src/lib/whatsapp/webhook.ts` (Added `ParsedTemplateUpdate`, media extraction from inbound messages)
+  - `src/lib/whatsapp/event-queue.ts` (Lifecycle template status/category/quality update processing in event queue)
+  - `src/components/settings/WabaSettings.tsx` (Masked token display with reveal toggle, AES-256-GCM encryption badge, safe credential handling)
+  - `src/types/crm.ts` (Added `WorkspaceSecret`, template fields `headerType`, `qualityRating`, `variableCount`)
+  - `scripts/migrate-secrets.mjs` (CLI migration utility to safely encrypt plaintext tokens from `waba_configs` into `workspace_secrets` with backup manifest, dry-run mode, and rollback instructions)
+  - `docs/REALTIME_ARCHITECTURE.md` (Architecture evaluation of `postgres_changes` vs Supabase Realtime Broadcast per workspace with authorization policies)
+  - `test-e2e.mjs` (Added 14 automated tests across Groups 14, 15, 16, 17, 59 total tests)
+  - `.gitignore` (Added `backups/`)
+- **Migrations Added:**
+  - `supabase/migrations/20261111_03_secrets_templates_media_indexes.sql`:
+    - Creates `public.workspace_secrets` (`id`, `workspace_id`, `key_version`, `access_token_encrypted`, `app_secret_encrypted`, `created_at`, `updated_at`, `UNIQUE(workspace_id)`)
+    - Enables RLS with NO policies for `anon` or `authenticated` (strictly isolated to `service_role`)
+    - Adds `header_type`, `quality_rating`, and `variable_count` to `public.message_templates`
+    - Creates performance indexes:
+      - `idx_conversations_workspace_last_message` on `conversations(workspace_id, last_message_at DESC)`
+      - `idx_conversations_workspace_unread` on `conversations(workspace_id) WHERE unread_count > 0`
+      - `idx_messages_conversation_created` on `messages(conversation_id, created_at ASC)`
+- **Environment Variables Added:**
+  - `ENCRYPTION_KEY` (32-byte hex string used for AES-256-GCM encryption at rest of access tokens and app secrets)
+- **Tests Added & Results:**
+  - Added 14 new automated test assertions to `test-e2e.mjs` (59 total, 100% pass):
+    - Group 14: AES-256-GCM encrypt/decrypt round trip with version prefix (`v1:iv:tag:ciphertext`), multi-version keyring rotation (`v1` and `v2`), authentication tag tamper detection
+    - Group 15: Secrets table RLS policy contract: `anon` and `authenticated` denied access, `service_role` allowed
+    - Group 16: Template parameter pre-validation: parameter count mismatch rejected with Meta error 132001, empty/whitespace variable rejected, missing header media rejected with 132012, valid parameters pass
+    - Group 17: Inbound media download and size limits: stubbed Graph API fetch stored to Supabase Storage path, oversized media (>16MB) rejected with `MEDIA_TOO_LARGE`
+  - TypeScript strict: PASS (`tsc --noEmit` exited 0)
+  - Next.js Turbopack build: PASS (9/9 routes compiled cleanly)
+  - E2E Tests: 59/59 passed (100%)
+- **// VERIFY Items:**
+  - Webhook field names for template category and quality updates: `message_template_status_update`, `previous_category`, `new_category`, `quality_score`.
+  - Max media download size for documents/video confirmed at 100MB; audio/image confirmed at 16MB.
+- **Skipped & Rationale:**
+  - Full migration of live frontend listeners to Realtime Broadcast is documented in `docs/REALTIME_ARCHITECTURE.md` and scheduled for Phase 2/3 as specified in prompt.
+- **Status:** Complete / Ready for Review

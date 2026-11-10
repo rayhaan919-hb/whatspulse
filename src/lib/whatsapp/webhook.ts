@@ -9,6 +9,7 @@ import type {
   MessageStatus,
   PendingStatusRecord,
   TenantRoutingConfig,
+  MessageTemplate,
 } from '../../types/crm';
 
 export interface ParsedIncomingMessage {
@@ -18,6 +19,9 @@ export interface ParsedIncomingMessage {
   timestamp: string;
   type: string;
   body: string;
+  mediaId?: string;
+  mimeType?: string;
+  mediaUrl?: string;
   interactiveSelection?: {
     id: string;
     title: string;
@@ -34,6 +38,19 @@ export interface ParsedStatusUpdate {
     title: string;
     message: string;
   };
+}
+
+// Meta Template Lifecycle Webhook Update (MV-03)
+// Official Documentation: https://developers.facebook.com/documentation/business-messaging/whatsapp/llms.txt
+export interface ParsedTemplateUpdate {
+  event: 'APPROVED' | 'REJECTED' | 'PAUSED' | 'PENDING' | 'FLAGGED' | string;
+  messageTemplateId?: string;
+  messageTemplateName?: string;
+  messageTemplateLanguage?: string;
+  reason?: string;
+  previousCategory?: string; // VERIFY: Meta sends previous_category on re-categorization
+  newCategory?: string; // VERIFY: Meta sends new_category on re-categorization
+  qualityRating?: string;
 }
 
 export const STATUS_RANK: Record<MessageStatus, number> = {
@@ -198,6 +215,8 @@ export class WebhookProcessor {
       senderName: msg.name,
       messageType: (msg.type as any) || 'text',
       content: msg.body,
+      mediaUrl: msg.mediaUrl || (msg.mediaId ? `/api/media/download?mediaId=${msg.mediaId}` : undefined),
+      mediaType: msg.mimeType,
       status: initialStatus,
       errorCode,
       errorDetails,
@@ -264,13 +283,15 @@ export class WebhookProcessor {
     phoneNumberId?: string;
     incomingMessages: ParsedIncomingMessage[];
     statusUpdates: ParsedStatusUpdate[];
+    templateUpdates: ParsedTemplateUpdate[];
   } {
     const incomingMessages: ParsedIncomingMessage[] = [];
     const statusUpdates: ParsedStatusUpdate[] = [];
+    const templateUpdates: ParsedTemplateUpdate[] = [];
     let phoneNumberId: string | undefined;
 
     if (!payload?.entry) {
-      return { phoneNumberId, incomingMessages, statusUpdates };
+      return { phoneNumberId, incomingMessages, statusUpdates, templateUpdates };
     }
 
     for (const entry of payload.entry) {
@@ -297,6 +318,10 @@ export class WebhookProcessor {
             const contactName = contactMap.get(msg.from) || fromNumber;
             let bodyText = '';
             let interactiveSelection;
+            let mediaId: string | undefined;
+            let mimeType: string | undefined;
+
+            const msgObj = msg as Record<string, any>;
 
             if (msg.type === 'text' && msg.text) {
               bodyText = msg.text.body;
@@ -310,8 +335,22 @@ export class WebhookProcessor {
               }
             } else if (msg.type === 'button' && msg.button) {
               bodyText = msg.button.text;
-            } else if (msg.type === 'image') {
+            } else if (msg.type === 'image' && msgObj.image) {
               bodyText = '📷 [Photo Attached]';
+              mediaId = msgObj.image.id;
+              mimeType = msgObj.image.mime_type || 'image/jpeg';
+            } else if (msg.type === 'video' && msgObj.video) {
+              bodyText = '🎥 [Video Attached]';
+              mediaId = msgObj.video.id;
+              mimeType = msgObj.video.mime_type || 'video/mp4';
+            } else if (msg.type === 'audio' && msgObj.audio) {
+              bodyText = '🎵 [Audio Attached]';
+              mediaId = msgObj.audio.id;
+              mimeType = msgObj.audio.mime_type || 'audio/ogg';
+            } else if (msg.type === 'document' && msgObj.document) {
+              bodyText = msgObj.document.filename ? `📄 ${msgObj.document.filename}` : '📄 [Document Attached]';
+              mediaId = msgObj.document.id;
+              mimeType = msgObj.document.mime_type || 'application/pdf';
             } else {
               bodyText = `📎 [${msg.type.toUpperCase()}]`;
             }
@@ -323,6 +362,8 @@ export class WebhookProcessor {
               timestamp: new Date(Number(msg.timestamp) * 1000).toISOString(),
               type: msg.type,
               body: bodyText,
+              mediaId,
+              mimeType,
               interactiveSelection,
             });
           }
@@ -340,9 +381,30 @@ export class WebhookProcessor {
             });
           }
         }
+
+        // 3. Process Template Lifecycle Updates (MV-03)
+        // VERIFY: Meta field names for template status & category/quality updates
+        const valObj = val as Record<string, any>;
+        const changeField = (change as Record<string, any>).field;
+        if (
+          changeField === 'message_template_status_update' ||
+          changeField === 'message_template_quality_update' ||
+          valObj.event
+        ) {
+          templateUpdates.push({
+            event: valObj.event || 'STATUS_UPDATE',
+            messageTemplateId: valObj.message_template_id,
+            messageTemplateName: valObj.message_template_name,
+            messageTemplateLanguage: valObj.message_template_language,
+            reason: valObj.reason,
+            previousCategory: valObj.previous_category, // VERIFY
+            newCategory: valObj.new_category, // VERIFY
+            qualityRating: valObj.quality_score?.score || valObj.quality_rating,
+          });
+        }
       }
     }
 
-    return { phoneNumberId, incomingMessages, statusUpdates };
+    return { phoneNumberId, incomingMessages, statusUpdates, templateUpdates };
   }
 }

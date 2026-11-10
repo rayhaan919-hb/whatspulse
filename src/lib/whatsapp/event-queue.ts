@@ -10,6 +10,8 @@ import type {
   PendingStatusRecord,
 } from '../../types/crm';
 import { WebhookProcessor } from './webhook';
+import { DEFAULT_TEMPLATES } from '../storage';
+import type { MessageTemplate } from '../../types/crm';
 
 // In-memory durable event buffer (mirrors public.webhook_events table)
 export const IN_MEMORY_WEBHOOK_EVENTS: WebhookEventRecord[] = [];
@@ -21,6 +23,7 @@ export interface EventProcessResult {
   status: 'completed' | 'failed' | 'dead_letter';
   processedMessages: number;
   processedStatuses: number;
+  processedTemplates?: number;
   error?: string;
 }
 
@@ -62,10 +65,11 @@ export class WebhookEventQueue {
 
     try {
       const workspaceId = event.workspaceId || 'ws_prod_01';
-      const { incomingMessages, statusUpdates } = WebhookProcessor.parsePayload(event.payload);
+      const { incomingMessages, statusUpdates, templateUpdates } = WebhookProcessor.parsePayload(event.payload);
 
       let processedMessages = 0;
       let processedStatuses = 0;
+      let processedTemplates = 0;
 
       // 1. Process Messages (Idempotent + early status resolution)
       for (const msg of incomingMessages) {
@@ -79,6 +83,28 @@ export class WebhookEventQueue {
         processedStatuses += 1;
       }
 
+      // 3. Process Template Lifecycle Updates (Status / Category / Quality)
+      // Reference: META_VERIFY.md MV-03
+      for (const tmpl of templateUpdates || []) {
+        const found = DEFAULT_TEMPLATES.find(
+          (t) =>
+            t.metaTemplateId === tmpl.messageTemplateId ||
+            t.name === tmpl.messageTemplateName
+        );
+        if (found) {
+          if (tmpl.event && ['APPROVED', 'PENDING', 'REJECTED', 'PAUSED'].includes(tmpl.event)) {
+            found.status = tmpl.event as MessageTemplate['status'];
+          }
+          if (tmpl.newCategory && ['MARKETING', 'UTILITY', 'AUTHENTICATION'].includes(tmpl.newCategory)) {
+            found.category = tmpl.newCategory as MessageTemplate['category'];
+          }
+          if (tmpl.qualityRating) {
+            found.qualityRating = tmpl.qualityRating as MessageTemplate['qualityRating'];
+          }
+        }
+        processedTemplates += 1;
+      }
+
       event.status = 'completed';
       event.processedAt = new Date().toISOString();
 
@@ -87,6 +113,7 @@ export class WebhookEventQueue {
         status: 'completed',
         processedMessages,
         processedStatuses,
+        processedTemplates,
       };
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);

@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { WhatsAppClient } from '@/lib/whatsapp/client';
 import { CareWindowService } from '@/lib/whatsapp/care-window';
 import { MetaErrorMapper } from '@/lib/whatsapp/errors';
+import { TemplateValidator } from '@/lib/whatsapp/template-validator';
+import { DEFAULT_TEMPLATES } from '@/lib/storage';
 import { MessageType } from '@/types/crm';
 
 export async function POST(request: NextRequest) {
@@ -73,7 +75,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Dispatch to Meta WhatsApp Cloud API
+    // 3. Pre-Flight Template Parameter Validation (Before Meta API invocation)
+    if (templateName) {
+      const template = DEFAULT_TEMPLATES.find((t) => t.name === templateName);
+      if (template) {
+        const validation = TemplateValidator.validate(template, {
+          bodyParams: body.bodyParams,
+          headerMediaUrl: body.headerMediaUrl,
+          buttonParams: body.buttonParams,
+        });
+
+        if (!validation.valid) {
+          return NextResponse.json(
+            {
+              error: validation.reason,
+              code: 'TEMPLATE_VALIDATION_ERROR',
+              errorCode: validation.errorCode,
+              actionRequired: 'INSPECT_TEMPLATE_PARAMETERS',
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // 4. Dispatch to Meta WhatsApp Cloud API
     const waClient = new WhatsAppClient();
     let metaResponse;
 

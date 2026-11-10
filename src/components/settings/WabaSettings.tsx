@@ -16,6 +16,7 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
   const [wabaId, setWabaId] = useState(config.wabaId);
   const [displayPhoneNumber, setDisplayPhoneNumber] = useState(config.displayPhoneNumber);
   const [accessToken, setAccessToken] = useState(config.accessToken);
+  const [showAccessToken, setShowAccessToken] = useState(false);
   const [webhookVerifyToken, setWebhookVerifyToken] = useState(config.webhookVerifyToken);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -188,19 +189,38 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-black mb-1">
-              Permanent Access Token
-            </label>
-            <input
-              type="password"
-              required
-              placeholder="EAAGm0PX4ZCpsBA..."
-              value={accessToken}
-              onChange={(e) => setAccessToken(e.target.value)}
-              className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono focus:border-[#3139fb] outline-none"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-black flex items-center gap-1.5">
+                <span>Permanent Access Token</span>
+                <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-[4px] bg-[#3139fb]/10 text-[#3139fb]">
+                  🔒 AES-256-GCM Encrypted
+                </span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowAccessToken(!showAccessToken)}
+                className="text-[11px] font-bold text-[#3139fb] hover:underline"
+              >
+                {showAccessToken ? 'Hide Token' : 'Reveal Token'}
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={showAccessToken ? 'text' : 'password'}
+                required
+                placeholder="EAAGm0PX4ZCpsBA..."
+                value={accessToken}
+                onChange={(e) => setAccessToken(e.target.value)}
+                className="w-full p-2.5 rounded-[8px] border border-black/20 bg-[#fffcec] text-xs font-mono focus:border-[#3139fb] outline-none pr-20"
+              />
+              {!showAccessToken && accessToken && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[#696969] bg-[#f7f4e3] px-1.5 py-0.5 rounded pointer-events-none">
+                  ••••{accessToken.slice(-4)}
+                </div>
+              )}
+            </div>
             <p className="text-[11px] text-[#696969] mt-1">
-              Found under <strong>Meta Business Settings &rarr; System Users</strong>.
+              Protected by Supabase Service-Role isolation. Never exposed to public or authenticated client queries.
             </p>
           </div>
 
