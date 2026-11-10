@@ -1618,7 +1618,9 @@ console.log('\n--- Test Group 35: Copy Sanitization & Compliance Verification --
 
 const fs = await import('fs');
 const readmeContent = fs.readFileSync('./README.md', 'utf8');
-const setupGuideContent = fs.readFileSync('./SETUP_GUIDE.md', 'utf8');
+const setupGuideContent = fs.existsSync('./SETUP_GUIDE.md') 
+  ? fs.readFileSync('./SETUP_GUIDE.md', 'utf8') 
+  : (fs.existsSync('./docs/INSTALL.md') ? fs.readFileSync('./docs/INSTALL.md', 'utf8') : '');
 
 // 35.1 Zero "Arc Browser" mentions in docs and components
 const globalsCss = fs.readFileSync('./src/app/globals.css', 'utf8');
@@ -1645,14 +1647,226 @@ assert(
 );
 
 // ============================================================================
+// Group 36: Setup Wizard & Interactive Setup Logic (scripts/setup-wizard.mjs)
+// ============================================================================
+console.log('\n--- Test Group 36: Setup Wizard & Environment Validation ---');
+
+const {
+  validateEnvironment,
+  buildWebhookUrl,
+  simulateWebhookHandshake,
+  simulateWebhookPost,
+  getMigrationFiles,
+  generateAdminSeed,
+  VERIFY_AND_SAVE_NOTICE,
+} = await import('./scripts/setup-wizard.mjs');
+
+// 36.1 Env validator flags missing required environment variables
+const invalidEnvResult = validateEnvironment({
+  NEXT_PUBLIC_APP_URL: '',
+  META_PHONE_NUMBER_ID: '',
+  META_ACCESS_TOKEN: '',
+  META_APP_SECRET: '',
+  META_WEBHOOK_VERIFY_TOKEN: '',
+  ENCRYPTION_KEY: '',
+});
+assert(
+  invalidEnvResult.isValid === false && invalidEnvResult.missingVars.length >= 5,
+  'Env validator flags missing required environment variables with error details'
+);
+
+// 36.2 Env validator accepts complete valid configuration
+const validMockEnv = {
+  NEXT_PUBLIC_APP_URL: 'https://crm.example.com',
+  META_PHONE_NUMBER_ID: '109847291823749',
+  META_WABA_ID: '298374918237491',
+  META_ACCESS_TOKEN: 'EAAG_sample_valid_access_token_123',
+  META_APP_SECRET: 'meta_app_secret_test_001',
+  META_WEBHOOK_VERIFY_TOKEN: 'custom_verify_token_998',
+  ENCRYPTION_KEY: 'a'.repeat(64), // valid 32-byte hex
+  NEXT_PUBLIC_SUPABASE_URL: 'https://xyzcompany.supabase.co',
+  SUPABASE_SERVICE_ROLE_KEY: 'ey_service_role_sample_key',
+  SUPABASE_DB_URL: 'postgresql://postgres:secret@db.xyzcompany.supabase.co:5432/postgres',
+};
+const validEnvResult = validateEnvironment(validMockEnv);
+assert(
+  validEnvResult.isValid === true && validEnvResult.missingVars.length === 0,
+  'Env validator validates and accepts complete configuration'
+);
+
+// 36.3 Webhook URL correctly constructed
+const generatedWebhookUrl = buildWebhookUrl('https://crm.example.com');
+assert(
+  generatedWebhookUrl === 'https://crm.example.com/api/webhooks/whatsapp',
+  'buildWebhookUrl constructs correct HTTPS webhook endpoint path'
+);
+
+// 36.4 Webhook self-check handshake logic validates challenge
+const handshakeResult = simulateWebhookHandshake(
+  'custom_verify_token_998',
+  'test_challenge_code_123',
+  'custom_verify_token_998'
+);
+assert(
+  handshakeResult.success === true && handshakeResult.challenge === 'test_challenge_code_123',
+  'Webhook self-check handshake validates challenge matching token'
+);
+
+// 36.5 Webhook signed test POST validation
+const postCheckResult = simulateWebhookPost('meta_app_secret_test_001');
+assert(
+  postCheckResult.success === true && postCheckResult.signature.startsWith('sha256='),
+  'Webhook self-check signed POST generates valid HMAC signature'
+);
+
+// 36.6 Migration files reader finds SQL files in chronological order
+const migrationFiles = getMigrationFiles('./supabase/migrations');
+assert(
+  Array.isArray(migrationFiles) && migrationFiles.length >= 3 && migrationFiles[0].includes('20261111_01'),
+  'Migration file reader discovers and sorts SQL migrations chronologically'
+);
+
+// 36.7 Admin seeder generates secure default admin user
+const adminSeed = generateAdminSeed('admin@whatspulse.io', 'Admin User', 'ws_prod_01');
+assert(
+  adminSeed.role === 'admin' && adminSeed.email === 'admin@whatspulse.io' && adminSeed.workspaceId === 'ws_prod_01',
+  'Admin seeder formats valid initial administrator account'
+);
+
+// 36.8 Prominently states Meta Verify and Save is the final confirmation
+assert(
+  typeof VERIFY_AND_SAVE_NOTICE === 'string' &&
+  VERIFY_AND_SAVE_NOTICE.includes('Verify and Save') &&
+  VERIFY_AND_SAVE_NOTICE.includes('Meta'),
+  'Notice explicitly states Meta "Verify and Save" is the final confirmation'
+);
+
+// ============================================================================
+// Group 37: Admin Diagnostic & System Status Service
+// ============================================================================
+console.log('\n--- Test Group 37: Admin System Status Diagnostic Engine ---');
+
+const { SystemStatusService } = await import('./src/lib/admin/system-status.ts');
+
+// 37.1 Live check report structure
+const statusReport = await SystemStatusService.runDiagnostics({
+  NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
+  SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
+  META_ACCESS_TOKEN: 'EAAG_test_token_live',
+  META_APP_SECRET: 'test_app_secret_live',
+  NEXT_PUBLIC_APP_URL: 'https://app.test.com',
+  ENCRYPTION_KEY: 'b'.repeat(64),
+  GEMINI_API_KEY: 'gemini_test_api_key',
+});
+assert(
+  statusReport.supabase.status === 'pass' &&
+  statusReport.metaToken.status === 'pass' &&
+  statusReport.appSecret.status === 'pass' &&
+  statusReport.encryptionKey.status === 'pass' &&
+  statusReport.geminiKey.status === 'pass',
+  'SystemStatusService produces passing statuses for configured services'
+);
+
+// 37.2 Fix hints provided on failure
+const failingReport = await SystemStatusService.runDiagnostics({
+  NEXT_PUBLIC_SUPABASE_URL: '',
+  SUPABASE_SERVICE_ROLE_KEY: '',
+  META_ACCESS_TOKEN: '',
+  META_APP_SECRET: '',
+  NEXT_PUBLIC_APP_URL: '',
+  ENCRYPTION_KEY: 'short_key',
+  GEMINI_API_KEY: '',
+});
+assert(
+  failingReport.supabase.status === 'fail' &&
+  typeof failingReport.supabase.fixHint === 'string' &&
+  failingReport.encryptionKey.status === 'fail' &&
+  failingReport.encryptionKey.fixHint.includes('32 bytes') &&
+  failingReport.metaToken.status === 'fail' &&
+  typeof failingReport.metaToken.fixHint === 'string',
+  'SystemStatusService flags missing services with actionable fix hints'
+);
+
+// 37.3 Zero secret exposure in diagnostic output
+const reportString = JSON.stringify(statusReport);
+assert(
+  !reportString.includes('EAAG_test_token_live') &&
+  !reportString.includes('test_app_secret_live') &&
+  !reportString.includes('gemini_test_api_key') &&
+  !reportString.includes('b'.repeat(64)),
+  'Zero secret exposure: raw tokens and keys are never leaked in diagnostic report'
+);
+
+// 37.4 Encryption key 32-byte length validator
+assert(
+  SystemStatusService.validateEncryptionKeyLength('c'.repeat(64)).valid === true &&
+  SystemStatusService.validateEncryptionKeyLength('too_short').valid === false,
+  'validateEncryptionKeyLength strictly requires 32 bytes (64 hex characters)'
+);
+
+// ============================================================================
+// Group 38: Distribution Packaging, Documentation & Hygiene
+// ============================================================================
+console.log('\n--- Test Group 38: Packaging, Documentation & Hygiene ---');
+
+// 38.1 No duplicate SETUP_GUIDE.md exists (merged into docs/INSTALL.md)
+const setupGuideStillExists = fs.existsSync('./SETUP_GUIDE.md');
+assert(
+  !setupGuideStillExists,
+  'SETUP_GUIDE.md safely merged into docs/INSTALL.md and duplicate deleted'
+);
+
+// 38.2 Required commercial documentation files exist
+assert(
+  fs.existsSync('./docs/INSTALL.md') &&
+  fs.existsSync('./docs/META_SETUP.md') &&
+  fs.existsSync('./docs/TROUBLESHOOTING.md') &&
+  fs.existsSync('./docs/API.md') &&
+  fs.existsSync('./CHANGELOG.md') &&
+  (fs.existsSync('./CREDITS') || fs.existsSync('./CREDITS.md')),
+  'Commercial documentation files exist: INSTALL.md, META_SETUP.md, TROUBLESHOOTING.md, API.md, CHANGELOG.md, CREDITS'
+);
+
+// 38.3 .env.example documents all required and optional variables
+const envExampleContent = fs.readFileSync('./.env.example', 'utf8');
+assert(
+  envExampleContent.includes('NEXT_PUBLIC_APP_URL') &&
+  envExampleContent.includes('META_ACCESS_TOKEN') &&
+  envExampleContent.includes('META_APP_SECRET') &&
+  envExampleContent.includes('ENCRYPTION_KEY') &&
+  envExampleContent.includes('SUPABASE_DB_URL') &&
+  envExampleContent.includes('GEMINI_API_KEY') &&
+  envExampleContent.includes('CRON_SECRET'),
+  '.env.example comprehensively documents all core and optional environment variables'
+);
+
+// 38.4 package.json has npm run setup script
+const packageJson = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+assert(
+  packageJson.scripts && packageJson.scripts.setup === 'node scripts/setup-wizard.mjs',
+  'package.json includes "setup": "node scripts/setup-wizard.mjs" script'
+);
+
+// 38.5 README requirements, Vercel deploy, and quickstart
+const fullReadme = fs.readFileSync('./README.md', 'utf8');
+assert(
+  fullReadme.includes('Node.js') &&
+  fullReadme.includes('Supabase') &&
+  fullReadme.includes('Meta') &&
+  fullReadme.includes('deploy') &&
+  fullReadme.includes('npm run setup'),
+  'README.md includes prerequisites (Node, Supabase, Meta), Vercel deploy, and quick start'
+);
+
+// ============================================================================
 // Final Summary
 // ============================================================================
 console.log(`\n======================================================`);
 console.log(`Test Results: ${passedTests}/${totalTests} tests passed (${Math.round((passedTests / totalTests) * 100)}%)`);
 if (passedTests === totalTests) {
-  console.log(`Phase 4B i18n, Accessibility & Copy Sanitization Verification Completed Successfully! 🚀`);
+  console.log(`Phase 5 Commercial Release Packaging Verification Completed Successfully! 🚀`);
 } else {
-  console.error(`❌ Some tests failed in Phase 4B verification.`);
+  console.error(`❌ Some tests failed in Phase 5 verification.`);
   process.exitCode = 1;
 }
 console.log(`======================================================\n`);
