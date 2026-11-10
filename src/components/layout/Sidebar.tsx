@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useI18n } from '@/lib/i18n/context';
 
 export type NavigationTab = 'inbox' | 'broadcasts' | 'contacts' | 'simulator' | 'analytics' | 'settings';
@@ -129,6 +130,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
             Open Test Chat ➔
           </button>
         )}
+
+        <div className="pt-2 border-t border-black/10">
+          <Link
+            href="/admin/system-status"
+            className="flex items-center justify-between px-2.5 py-1.5 rounded-[8px] bg-[#fffcec] hover:bg-black/5 text-[11px] font-semibold text-black transition-colors"
+            title="Open Infrastructure Health & Diagnostics Dashboard"
+          >
+            <span className="flex items-center gap-1.5">
+              <span>🩺</span>
+              <span>System Status</span>
+            </span>
+            <span className="text-[10px] text-[#696969] font-mono">Admin ➔</span>
+          </Link>
+        </div>
       </div>
     </aside>
   );
