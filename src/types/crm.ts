@@ -167,9 +167,22 @@ export interface MessageTemplate {
   language: string;
   status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'PAUSED';
   header?: string;
+  headerType?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'LOCATION' | 'NONE';
   body: string; // Contains placeholders like {{1}}, {{2}}
   footer?: string;
   buttons?: Array<{ type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER'; text: string; value?: string }>;
+  qualityRating?: 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN';
+  variableCount?: number;
+}
+
+export interface WorkspaceSecret {
+  id: string;
+  workspaceId: string;
+  keyVersion: string;
+  accessTokenEncrypted: string;
+  appSecretEncrypted?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface BroadcastCampaign {
