@@ -1,0 +1,320 @@
+openapi: 3.1.0
+info:
+  title: WhatsPulse CRM Public REST API
+  description: |
+    Official Developer API for WhatsPulse CRM.
+    Enables external platforms (Zapier, Make, custom ERP/backends) to send WhatsApp messages, sync contacts, query conversations, and listen to HMAC-signed outbound webhooks.
+  version: 1.0.0
+servers:
+  - url: https://api.whatspulse.com
+    description: Production Server
+  - url: http://localhost:3000
+    description: Local Development Server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/v1/messages:
+    post:
+      summary: Send Outbound WhatsApp Message
+      description: Dispatches an outbound WhatsApp text, template, or media message through Meta Cloud API within the workspace's care window.
+      operationId: sendMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '201':
+          description: Message dispatched and queued successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      summary: List Recent Messages
+      operationId: listMessages
+      parameters:
+        - name: conversationId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Array of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+
+  /api/v1/contacts:
+    get:
+      summary: List Workspace Contacts
+      operationId: listContacts
+      responses:
+        '200':
+          description: Array of contacts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Contact'
+    post:
+      summary: Create or Upsert Contact
+      operationId: createContact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContactRequest'
+      responses:
+        '201':
+          description: Contact created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Contact'
+
+  /api/v1/conversations:
+    get:
+      summary: List Conversations
+      operationId: listConversations
+      responses:
+        '200':
+          description: Array of active conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conversation'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: wp_live_*
+      description: |
+        Authenticate requests by passing your workspace API key:
+        `Authorization: Bearer wp_live_...`
+
+  responses:
+    Unauthorized:
+      description: Authentication failed or API key revoked
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Request body validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    SendMessageRequest:
+      type: object
+      required:
+        - to
+      properties:
+        to:
+          type: string
+          description: Recipient WhatsApp phone number in E.164 format (+14155552671)
+          example: '+14155552671'
+        content:
+          type: string
+          description: Text message content (if sending free-form message within 24h care window)
+          example: 'Hello! Your support ticket has been updated.'
+        templateName:
+          type: string
+          description: Approved Meta WhatsApp template name (required if care window >24h closed)
+          example: 'order_status_update'
+        mediaUrl:
+          type: string
+          description: Public URL of image, document, or audio attachment
+          example: 'https://example.com/invoice.pdf'
+
+    CreateContactRequest:
+      type: object
+      required:
+        - phoneNumber
+        - name
+      properties:
+        phoneNumber:
+          type: string
+          example: '+14155552671'
+        name:
+          type: string
+          example: 'Marcus Vance'
+        email:
+          type: string
+          example: 'marcus@example.com'
+        tags:
+          type: array
+          items:
+            type: string
+          example: ['Enterprise', 'VIP']
+        customAttributes:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            Company: 'Acme Corp'
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        workspaceId:
+          type: string
+        senderType:
+          type: string
+          enum: [contact, agent, bot]
+        messageType:
+          type: string
+          enum: [text, image, audio, video, document, template]
+        content:
+          type: string
+        mediaUrl:
+          type: string
+        status:
+          type: string
+          enum: [sent, delivered, read, failed]
+        createdAt:
+          type: string
+          format: date-time
+
+    Contact:
+      type: object
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        phoneNumber:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        customAttributes:
+          type: object
+        lastInteractionAt:
+          type: string
+          format: date-time
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        contactId:
+          type: string
+        assignedTo:
+          type: string
+        status:
+          type: string
+          enum: [open, pending, resolved]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        unreadCount:
+          type: integer
+        lastMessagePreview:
+          type: string
+        lastMessageAt:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: 'Unauthorized: Invalid API key'
+
+webhooks:
+  outboundEvents:
+    post:
+      summary: WhatsPulse Outbound Webhook Delivery
+      description: |
+        Dispatched to client endpoints configured in Settings > Webhooks.
+        Signed with header:
+        - `X-WhatsPulse-Signature-256`: HMAC-SHA256 of `${timestamp}.${raw_json_body}`
+        - `X-WhatsPulse-Timestamp`: Epoch seconds
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event:
+                  type: string
+                  enum: [message.received, message.delivered, message.read, conversation.assigned]
+                workspaceId:
+                  type: string
+                timestamp:
+                  type: string
+                  format: date-time
+                data:
+                  type: object
+      responses:
+        '200':
+          description: Acknowledged by webhook subscriber
