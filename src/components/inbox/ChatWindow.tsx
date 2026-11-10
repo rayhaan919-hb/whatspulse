@@ -8,6 +8,7 @@ import { CannedReplyService } from '@/lib/inbox/canned-replies';
 import { SnoozeService } from '@/lib/inbox/snooze';
 import { PresenceService, ViewerPresence } from '@/lib/realtime/presence';
 import { DEFAULT_CANNED_REPLIES } from '@/lib/storage';
+import { useI18n } from '@/lib/i18n/context';
 
 interface ChatWindowProps {
   conversation: Conversation;
@@ -64,6 +65,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const { t } = useI18n();
 
   const remainingWindowMs = CareWindowService.getTimeRemainingMs(conversation.lastInboundAt);
   const isWindowOpen = CareWindowService.validateOutboundSend({
@@ -869,7 +871,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
         {/* Floating Templates Picker Panel */}
         {showTemplates && (
-          <div className="absolute bottom-full left-0 right-0 z-30 bg-[#f7f4e3] border-t border-b border-black/20 p-4 max-h-64 overflow-y-auto shadow-lg">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pre-approved WhatsApp Templates"
+            className="absolute bottom-full start-0 end-0 z-30 bg-[#f7f4e3] border-t border-b border-black/20 p-4 max-h-64 overflow-y-auto shadow-lg text-start"
+          >
             <div className="flex items-center justify-between mb-2.5">
               <span className="text-xs font-bold text-black">
                 📋 Choose a Pre-Approved WhatsApp Template
@@ -877,7 +884,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <button
                 type="button"
                 onClick={() => setShowTemplates(false)}
-                className="w-7 h-7 rounded-lg hover:bg-black/10 flex items-center justify-center text-black font-bold text-xs cursor-pointer"
+                aria-label="Close templates"
+                className="w-7 h-7 rounded-lg hover:bg-black/10 flex items-center justify-center text-black font-bold text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 title="Close templates (Esc)"
               >
                 ✕
@@ -889,7 +897,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   key={tmpl.id}
                   type="button"
                   onClick={() => handleSelectTemplate(tmpl)}
-                  className="p-3 rounded-[10px] bg-[#fffcec] border border-black/15 hover:border-[#3139fb] text-left cursor-pointer transition-all"
+                  aria-label={`Select template ${tmpl.name}: ${tmpl.body}`}
+                  className="p-3 rounded-[10px] bg-[#fffcec] border border-black/15 hover:border-[#3139fb] text-start cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 >
                   <div className="flex items-center justify-between text-xs font-bold text-black mb-1">
                     <span className="truncate">{tmpl.name}</span>
@@ -915,13 +924,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   setIsInternalNote(false);
                   setShowMentionMenu(false);
                 }}
-                className={`px-3 py-1 rounded-[6px] text-xs font-semibold transition-all cursor-pointer ${
+                aria-label={t('chat.replyTab')}
+                className={`px-3 py-1 rounded-[6px] text-xs font-semibold transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
                   !isInternalNote
                     ? 'bg-black text-[#fffcec]'
                     : 'text-[#696969] hover:text-black'
                 }`}
               >
-                💬 WhatsApp Reply
+                💬 {t('chat.replyTab')}
               </button>
               <button
                 type="button"
@@ -930,13 +940,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   setShowCannedReplies(false);
                   setShowTemplates(false);
                 }}
-                className={`px-3 py-1 rounded-[6px] text-xs font-semibold transition-all cursor-pointer ${
+                aria-label={t('chat.noteTab')}
+                className={`px-3 py-1 rounded-[6px] text-xs font-semibold transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
                   isInternalNote
                     ? 'bg-black text-[#fffcec]'
                     : 'text-[#696969] hover:text-black'
                 }`}
               >
-                🔒 Private Team Note
+                🔒 {t('chat.noteTab')}
               </button>
             </div>
 
@@ -963,7 +974,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 type="button"
                 onClick={handleSendVoiceNote}
                 disabled={(!isWindowOpen && !isInternalNote) || isSending}
-                className="px-2.5 py-1 rounded-[8px] border border-black/20 hover:bg-[#f7f4e3] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                aria-label={t('chat.recordVoice')}
+                className="px-2.5 py-1 rounded-[8px] border border-black/20 hover:bg-[#f7f4e3] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 title="Send a voice note"
               >
                 <span>🎙️</span>
@@ -977,11 +989,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 type="button"
                 onClick={handleAttachMedia}
                 disabled={(!isWindowOpen && !isInternalNote) || isSending}
-                className="px-2.5 py-1 rounded-[8px] border border-black/20 hover:bg-[#f7f4e3] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                aria-label={t('chat.attachMedia')}
+                className="px-2.5 py-1 rounded-[8px] border border-black/20 hover:bg-[#f7f4e3] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 title="Attach photo or document"
               >
                 <span>📎</span>
                 <span className="hidden sm:inline">Media</span>
+              </button>
+            )}
+
+            {/* Template Selector Trigger */}
+            {!isInternalNote && (
+              <button
+                type="button"
+                onClick={toggleTemplates}
+                aria-label="Pre-approved WhatsApp Templates"
+                className={`px-3 py-1 rounded-[8px] border text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
+                  showTemplates
+                    ? 'bg-black text-[#fffcec] border-black'
+                    : 'bg-[#fffcec] text-black border-black/20 hover:bg-[#f7f4e3]'
+                }`}
+                title="Send pre-approved Meta template"
+              >
+                <span>📋</span>
+                <span>Templates</span>
               </button>
             )}
 
@@ -1037,6 +1068,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             rows={2}
             value={inputText}
             disabled={(!isWindowOpen && !isInternalNote) || isSending}
+            aria-label={isInternalNote ? t('chat.notePlaceholder') : t('chat.composerPlaceholder')}
             onChange={(e) => {
               const val = e.target.value;
               setInputText(val);
@@ -1062,26 +1094,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             }}
             placeholder={
               isInternalNote
-                ? 'Write a private note (type @ to tag a teammate)...'
+                ? t('chat.notePlaceholder')
                 : !isWindowOpen
-                ? '⏱️ Customer care window is closed (>24h). Click "Send Approved Template" above to message this customer.'
-                : `Type a message (type / for canned replies, Enter to send)...`
+                ? '⏱️ Customer care window is closed (>24h). Choose a template above.'
+                : t('chat.composerPlaceholder')
             }
-            className="flex-1 min-w-0 p-3 bg-[#f7f4e3] text-black border border-black/20 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff] rounded-[10px] text-xs md:text-sm outline-none resize-none placeholder-[#696969] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex-1 min-w-0 p-3 bg-[#f7f4e3] text-black border border-black/20 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff] rounded-[10px] text-xs md:text-sm outline-none resize-none placeholder-[#696969] disabled:opacity-60 disabled:cursor-not-allowed text-start"
           />
 
           <button
             type="button"
             onClick={handleSend}
             disabled={(!isWindowOpen && !isInternalNote) || !inputText.trim() || isSending}
-            className="h-[58px] px-5 rounded-[14px] bg-black hover:bg-[#000354] text-[#fffcec] font-bold text-xs md:text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center gap-2 cursor-pointer shadow-xs"
+            aria-label={isInternalNote ? "Save internal note" : t('chat.send')}
+            className="h-[58px] px-5 rounded-[14px] bg-black hover:bg-[#000354] text-[#fffcec] font-bold text-xs md:text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center gap-2 cursor-pointer shadow-xs focus-visible:ring-2 focus-visible:ring-[#3139fb]"
           >
             <span>
               {isSending
                 ? 'Sending...'
                 : isInternalNote
                 ? 'Save Note'
-                : 'Send Reply'}
+                : t('chat.send')}
             </span>
             <span className="text-base">➔</span>
           </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   WABAConfig,
   InAppAlert,
@@ -11,6 +11,7 @@ import {
   OutboundWebhookDelivery,
 } from '@/types/crm';
 import { ApiKeyService } from '@/lib/api/api-keys';
+import { useI18n } from '@/lib/i18n/context';
 
 interface WabaSettingsProps {
   config: WABAConfig;
@@ -115,6 +116,19 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
 
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const { t } = useI18n();
+
+  // Close modals on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowGenerateKeyModal(false);
+        setShowAddWebhookModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const appUrl =
     typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com';
@@ -218,10 +232,10 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
           <h2 className="text-xl font-bold text-black tracking-tight">
-            WhatsApp Business API &amp; Automation Settings
+            {t('settings.title')}
           </h2>
           <p className="text-xs text-[#696969] mt-1">
-            Configure Meta Cloud API credentials, auto-assignment rules, business operating schedules, and compliance allowances.
+            {t('settings.subtitle')}
           </p>
         </div>
 
@@ -229,7 +243,7 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
           {/* Section 1: Credentials */}
           <div className="p-5 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-4">
             <h3 className="text-sm font-bold text-black border-b border-black/10 pb-2">
-              Meta Cloud API Credentials
+              {t('settings.credentials')}
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -779,7 +793,12 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
 
         {/* Modal: Generate API Key */}
         {showGenerateKeyModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Generate Workspace API Key"
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-start"
+          >
             <div className="bg-[#fffcec] border border-black/20 rounded-[14px] p-6 max-w-md w-full shadow-2xl space-y-4">
               <h3 className="text-base font-bold text-black">
                 {generatedPlaintextKey ? 'API Key Generated' : 'Create New API Key'}
@@ -857,7 +876,12 @@ export const WabaSettings: React.FC<WabaSettingsProps> = ({
 
         {/* Modal: Add Outbound Webhook */}
         {showAddWebhookModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Register Outbound Webhook"
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-start"
+          >
             <div className="bg-[#fffcec] border border-black/20 rounded-[14px] p-6 max-w-md w-full shadow-2xl space-y-4">
               <h3 className="text-base font-bold text-black">Register Outbound Webhook</h3>
               <form onSubmit={handleAddWebhook} className="space-y-4">

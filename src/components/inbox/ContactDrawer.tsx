@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Conversation, WorkspaceMember } from '@/types/crm';
 import { AISummaryResponse } from '@/lib/ai/copilot';
+import { useI18n } from '@/lib/i18n/context';
 
 interface ContactDrawerProps {
   conversation: Conversation;
@@ -27,6 +28,7 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({
   aiSummary,
   isAiSummaryLoading,
 }) => {
+  const { t } = useI18n();
   const [newTagInput, setNewTagInput] = useState('');
   const contact = conversation.contact;
 
@@ -50,19 +52,25 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({
   };
 
   const drawerContent = (
-    <div className="w-80 shrink-0 border-l border-black/10 bg-[#fffcec] flex flex-col h-full overflow-y-auto select-none">
+    <aside
+      role="dialog"
+      aria-modal="false"
+      aria-label={t('drawer.customerProfile')}
+      className="w-80 shrink-0 border-s border-black/10 bg-[#fffcec] flex flex-col h-full overflow-y-auto select-none text-start"
+    >
       {/* Header with Large Close Button */}
       <div className="h-16 px-4 border-b border-black/10 flex items-center justify-between shrink-0">
         <span className="text-xs font-bold text-black">
-          Customer Profile
+          {t('drawer.customerProfile')}
         </span>
         <button
           type="button"
           onClick={onClose}
-          className="px-2.5 py-1 rounded-[8px] bg-[#f7f4e3] hover:bg-black hover:text-[#fffcec] border border-black/15 text-black text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1"
+          aria-label={t('common.close')}
+          className="px-2.5 py-1 rounded-[8px] bg-[#f7f4e3] hover:bg-black hover:text-[#fffcec] border border-black/15 text-black text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-[#3139fb]"
           title="Close Customer Profile (Esc)"
         >
-          <span>Close</span>
+          <span>{t('common.close')}</span>
           <span>✕</span>
         </button>
       </div>
@@ -241,7 +249,7 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </aside>
   );
 
   return (

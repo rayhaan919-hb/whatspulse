@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Conversation, WorkspaceMember } from '@/types/crm';
 import { SnoozeService } from '@/lib/inbox/snooze';
 import { playInboundChime, requestBrowserNotifications } from '@/lib/audio/sound';
+import { useI18n } from '@/lib/i18n/context';
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -34,6 +35,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   soundEnabled = true,
   onToggleSound,
 }) => {
+  const { t } = useI18n();
+
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
@@ -112,10 +115,17 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         return;
       }
 
-      if (e.key === 'Escape' && isCommandPaletteOpen) {
-        e.preventDefault();
-        setIsCommandPaletteOpen(false);
-        return;
+      if (e.key === 'Escape') {
+        if (isCommandPaletteOpen) {
+          e.preventDefault();
+          setIsCommandPaletteOpen(false);
+          return;
+        }
+        if (showBulkLabelModal) {
+          e.preventDefault();
+          setShowBulkLabelModal(false);
+          return;
+        }
       }
 
       // Skip j/k if user is typing in any form input or modal
@@ -127,7 +137,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           activeElement.tagName === 'SELECT' ||
           activeElement.getAttribute('contenteditable') === 'true');
 
-      if (isInputActive || isCommandPaletteOpen) return;
+      if (isInputActive || isCommandPaletteOpen || showBulkLabelModal) return;
 
       if (e.key === 'j' || e.key === 'J') {
         // Move selection down
@@ -155,7 +165,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         }
       }
     },
-    [filteredConversations, selectedConversationId, onSelectConversation, isCommandPaletteOpen]
+    [filteredConversations, selectedConversationId, onSelectConversation, isCommandPaletteOpen, showBulkLabelModal]
   );
 
   useEffect(() => {
@@ -227,16 +237,17 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   }, [conversations, paletteQuery]);
 
   return (
-    <div className="w-72 lg:w-80 shrink-0 border-r border-black/10 bg-[#fffcec] flex flex-col h-full select-none overflow-hidden relative">
+    <div className="w-72 lg:w-80 shrink-0 border-e border-black/10 bg-[#fffcec] flex flex-col h-full select-none overflow-hidden relative">
       {/* Header & Search Input */}
-      <div className="p-3.5 border-b border-black/10 space-y-2.5 shrink-0">
+      <div className="p-3.5 border-b border-black/10 space-y-2.5 shrink-0 text-start">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-black tracking-tight">Conversations</h2>
+            <h2 className="text-sm font-bold text-black tracking-tight">{t('inbox.conversations')}</h2>
             <button
               type="button"
               onClick={() => setIsCommandPaletteOpen(true)}
-              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/5 hover:bg-black/10 text-[#696969] hover:text-black border border-black/10 transition-colors cursor-pointer"
+              aria-label="Open command palette (Cmd+K)"
+              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/5 hover:bg-black/10 text-[#696969] hover:text-black border border-black/10 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
               title="Quick Search &amp; Command Palette (Cmd+K)"
             >
               ⌘K
@@ -247,7 +258,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             <button
               type="button"
               onClick={handleTestSound}
-              className={`p-1 rounded text-xs transition-colors cursor-pointer ${
+              aria-label={soundEnabled ? 'Mute inbound chime sound' : 'Unmute inbound chime sound'}
+              className={`p-1 rounded text-xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
                 soundEnabled
                   ? 'text-[#3139fb] hover:bg-[#3139fb]/10'
                   : 'text-[#696969] hover:bg-black/5'
@@ -257,7 +269,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               {soundEnabled ? '🔔' : '🔕'}
             </button>
             <span className="text-[11px] font-medium text-[#696969]">
-              {filteredConversations.length} shown
+              {filteredConversations.length} {t('inbox.shown')}
             </span>
           </div>
         </div>
@@ -265,16 +277,18 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         <div className="relative">
           <input
             type="text"
-            placeholder="Search (or j/k to navigate)..."
+            placeholder={t('inbox.searchPlaceholder')}
+            aria-label={t('inbox.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#f7f4e3] text-black border border-black/15 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff] rounded-[8px] pl-3 pr-7 py-2 text-xs outline-none placeholder-[#696969]"
+            className="w-full bg-[#f7f4e3] text-black border border-black/15 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff] rounded-[8px] ps-3 pe-7 py-2 text-xs outline-none placeholder-[#696969] text-start"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-[#696969] hover:text-black text-xs font-bold p-1 cursor-pointer"
+              aria-label={t('common.clear')}
+              className="absolute end-2 top-1/2 -translate-y-1/2 text-[#696969] hover:text-black text-xs font-bold p-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
               title="Clear search"
             >
               ✕
@@ -283,21 +297,28 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         </div>
 
         {/* 5-Tab Filter Row (All, Mine, Free, Snoozed, Done) */}
-        <div className="grid grid-cols-5 gap-1 bg-[#f7f4e3] p-1 rounded-[8px] border border-black/10">
+        <div
+          className="grid grid-cols-5 gap-1 bg-[#f7f4e3] p-1 rounded-[8px] border border-black/10"
+          role="tablist"
+          aria-label="Conversation Status Filters"
+        >
           {[
-            { id: 'all', label: 'Open', count: allCount },
-            { id: 'mine', label: 'Mine', count: mineCount },
-            { id: 'unassigned', label: 'Free', count: unassignedCount },
-            { id: 'snoozed', label: 'Snooze', count: snoozedCount },
-            { id: 'resolved', label: 'Done', count: resolvedCount },
+            { id: 'all', label: t('inbox.openTab'), count: allCount },
+            { id: 'mine', label: t('inbox.mineTab'), count: mineCount },
+            { id: 'unassigned', label: t('inbox.freeTab'), count: unassignedCount },
+            { id: 'snoozed', label: t('inbox.snoozeTab'), count: snoozedCount },
+            { id: 'resolved', label: t('inbox.doneTab'), count: resolvedCount },
           ].map((tab) => {
             const isActive = filter === tab.id;
             return (
               <button
                 key={tab.id}
                 type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-label={`${tab.label} (${tab.count})`}
                 onClick={() => setFilter(tab.id as ConversationFilter)}
-                className={`py-1.5 px-0.5 rounded-[6px] text-[10.5px] font-semibold transition-all flex flex-col items-center justify-center cursor-pointer ${
+                className={`py-1.5 px-0.5 rounded-[6px] text-[10.5px] font-semibold transition-all flex flex-col items-center justify-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
                   isActive
                     ? 'bg-black text-[#fffcec] shadow-xs'
                     : 'text-[#696969] hover:text-black hover:bg-black/5'
@@ -327,21 +348,23 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                   selectedIds.length === filteredConversations.length
                 }
                 onChange={handleToggleSelectAll}
-                className="w-3.5 h-3.5 accent-[#3139fb] rounded"
+                aria-label={selectedIds.length > 0 ? `Deselect all ${filteredConversations.length} conversations` : `Select all ${filteredConversations.length} conversations`}
+                className="w-3.5 h-3.5 accent-[#3139fb] rounded cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
               />
               <span>
                 {selectedIds.length > 0
-                  ? `${selectedIds.length} selected`
-                  : 'Select mode'}
+                  ? t('inbox.selectedCount', { count: selectedIds.length })
+                  : t('inbox.selectMode')}
               </span>
             </label>
             {selectedIds.length > 0 && (
               <button
                 type="button"
                 onClick={() => setSelectedIds([])}
-                className="text-[#3139fb] hover:underline font-semibold"
+                aria-label="Clear selected conversations"
+                className="text-[#3139fb] hover:underline font-semibold cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
               >
-                Clear
+                {t('common.clear')}
               </button>
             )}
           </div>
@@ -351,18 +374,19 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         {availableLabels.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
             <span className="text-[10px] uppercase font-bold text-[#696969] shrink-0 tracking-wider">
-              Labels:
+              {t('inbox.labels')}
             </span>
             <button
               type="button"
               onClick={() => setSelectedLabel(null)}
-              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 cursor-pointer transition-colors ${
+              aria-label="Filter by all labels"
+              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
                 selectedLabel === null
                   ? 'bg-black text-[#fffcec]'
                   : 'bg-black/5 text-[#696969] hover:text-black'
               }`}
             >
-              All
+              {t('inbox.allLabels')}
             </button>
             {availableLabels.map((lbl) => {
               const isSelected = selectedLabel === lbl;
@@ -371,7 +395,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                   key={lbl}
                   type="button"
                   onClick={() => setSelectedLabel(isSelected ? null : lbl)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 cursor-pointer transition-colors ${
+                  aria-label={`Filter by label ${lbl}`}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
                     isSelected
                       ? 'bg-[#3139fb] text-[#fffcec]'
                       : 'bg-[#3139fb]/10 text-[#3139fb] hover:bg-[#3139fb]/20'
@@ -386,7 +411,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       </div>
 
       {/* Conversation Feed */}
-      <div className="flex-1 overflow-y-auto divide-y divide-black/10 pb-16">
+      <div className="flex-1 overflow-y-auto divide-y divide-black/10 pb-16 text-start">
         {filteredConversations.length === 0 ? (
           <div className="p-6 text-center space-y-3">
             <div className="w-11 h-11 rounded-full bg-[#f7f4e3] border border-black/10 flex items-center justify-center text-lg mx-auto">
@@ -394,21 +419,22 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             </div>
             <div className="space-y-1">
               <p className="text-xs font-bold text-black">
-                {searchQuery || selectedLabel ? 'No matching chats' : 'No conversations here yet'}
+                {searchQuery || selectedLabel ? t('inbox.noChats') : t('inbox.noConversations')}
               </p>
               <p className="text-[11px] text-[#696969] leading-relaxed">
                 {searchQuery || selectedLabel
-                  ? 'Try clearing the search or label filters.'
-                  : 'Send a quick test message or load sample data to see chats appear here.'}
+                  ? t('inbox.clearSearchPrompt')
+                  : t('inbox.emptyStatePrompt')}
               </p>
             </div>
             {!searchQuery && !selectedLabel && onOpenSimulator && (
               <button
                 type="button"
                 onClick={onOpenSimulator}
-                className="px-3.5 py-2 bg-black hover:bg-[#000354] text-[#fffcec] font-semibold rounded-[8px] text-xs transition-all cursor-pointer"
+                aria-label={t('inbox.sendTestPrompt')}
+                className="px-3.5 py-2 bg-black hover:bg-[#000354] text-[#fffcec] font-semibold rounded-[8px] text-xs transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
               >
-                Send a Test Message ➔
+                {t('inbox.sendTestPrompt')}
               </button>
             )}
           </div>
@@ -422,9 +448,18 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               <div
                 key={conv.id}
                 onClick={() => onSelectConversation(conv.id)}
-                className={`p-3 cursor-pointer transition-colors flex items-start gap-2.5 relative ${
+                role="button"
+                tabIndex={0}
+                aria-label={`Conversation with ${conv.contact.name}`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectConversation(conv.id);
+                  }
+                }}
+                className={`p-3 cursor-pointer transition-colors flex items-start gap-2.5 relative outline-none focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
                   isSelected
-                    ? 'bg-[#f7f4e3] border-l-4 border-[#3139fb]'
+                    ? 'bg-[#f7f4e3] border-s-4 border-[#3139fb]'
                     : 'hover:bg-[#f7f4e3]/60'
                 }`}
               >
@@ -437,7 +472,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                     type="checkbox"
                     checked={isChecked}
                     onChange={() => {}}
-                    className="w-3.5 h-3.5 accent-[#3139fb] rounded cursor-pointer"
+                    aria-label={`Select conversation with ${conv.contact.name}`}
+                    className="w-3.5 h-3.5 accent-[#3139fb] rounded cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                   />
                 </div>
 
@@ -453,7 +489,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                     className="w-9 h-9 rounded-full object-cover border border-black/15"
                   />
                   {conv.unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-[#3139fb] text-[#fffcec] rounded-full text-[9px] font-bold flex items-center justify-center shadow-xs">
+                    <span className="absolute -top-1 -end-1 min-w-[16px] h-[16px] px-1 bg-[#3139fb] text-[#fffcec] rounded-full text-[9px] font-bold flex items-center justify-center shadow-xs">
                       {conv.unreadCount}
                     </span>
                   )}
@@ -481,7 +517,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                   <div className="flex items-center gap-1 flex-wrap mb-1">
                     {isSnoozed && (
                       <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-                        ⏰ Snoozed
+                        {t('inbox.snoozed')}
                       </span>
                     )}
                     {conv.labels?.map((lbl, idx) => (
@@ -515,7 +551,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                         </span>
                       ) : (
                         <span className="text-[9.5px] font-semibold text-[#3139fb] bg-[#3139fb]/10 px-1.5 py-0.5 rounded">
-                          Unassigned
+                          {t('inbox.unassigned')}
                         </span>
                       )}
                     </div>
@@ -529,37 +565,44 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 
       {/* Floating Bulk Actions Bar when conversations are selected */}
       {selectedIds.length > 0 && (
-        <div className="absolute bottom-3 left-3 right-3 bg-black text-[#fffcec] p-2.5 rounded-[10px] shadow-lg flex items-center justify-between gap-2 z-20 animate-fade-in border border-black/20">
+        <div
+          role="region"
+          aria-label="Bulk actions bar"
+          className="absolute bottom-3 start-3 end-3 bg-black text-[#fffcec] p-2.5 rounded-[10px] shadow-lg flex items-center justify-between gap-2 z-20 animate-fade-in border border-black/20"
+        >
           <div className="text-[11px] font-bold truncate">
-            {selectedIds.length} chat{selectedIds.length > 1 ? 's' : ''}
+            {t('inbox.selectedCount', { count: selectedIds.length })}
           </div>
 
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => handleBulkStatusChange('resolved')}
-              className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-[10px] font-semibold transition-colors cursor-pointer"
+              aria-label={t('inbox.bulkDone')}
+              className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-[10px] font-semibold transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-white"
               title="Resolve selected chats"
             >
-              ✓ Done
+              {t('inbox.bulkDone')}
             </button>
             <button
               type="button"
               onClick={() => handleBulkStatusChange('open')}
-              className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-[10px] font-semibold transition-colors cursor-pointer"
+              aria-label={t('inbox.bulkOpen')}
+              className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-[10px] font-semibold transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-white"
               title="Open selected chats"
             >
-              Open
+              {t('inbox.bulkOpen')}
             </button>
 
             {/* Quick Assign Dropdown */}
             <select
               onChange={(e) => handleBulkAssignChange(e.target.value || undefined)}
               defaultValue=""
-              className="bg-white/15 text-[#fffcec] text-[10px] font-medium py-1 px-1.5 rounded outline-none cursor-pointer max-w-[75px]"
+              aria-label="Assign selected conversations to agent"
+              className="bg-white/15 text-[#fffcec] text-[10px] font-medium py-1 px-1.5 rounded outline-none cursor-pointer max-w-[75px] focus-visible:ring-2 focus-visible:ring-white"
             >
               <option value="" disabled className="text-black">
-                Assign...
+                {t('inbox.bulkAssign')}
               </option>
               {availableAgents.map((agent) => (
                 <option key={agent.id} value={agent.id} className="text-black">
@@ -571,9 +614,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             <button
               type="button"
               onClick={() => setShowBulkLabelModal(true)}
-              className="px-2 py-1 bg-[#3139fb] hover:bg-[#000354] rounded text-[10px] font-semibold transition-colors cursor-pointer"
+              aria-label={t('inbox.bulkLabel')}
+              className="px-2 py-1 bg-[#3139fb] hover:bg-[#000354] rounded text-[10px] font-semibold transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-white"
             >
-              + Label
+              {t('inbox.bulkLabel')}
             </button>
           </div>
         </div>
@@ -581,33 +625,41 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 
       {/* Bulk Add Label Modal */}
       {showBulkLabelModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('inbox.addLabelTitle', { count: selectedIds.length })}
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 text-start"
+        >
           <div className="bg-[#fffcec] border border-black/20 rounded-[12px] p-5 max-w-xs w-full shadow-xl space-y-3">
             <h3 className="text-sm font-bold text-black">
-              Add Label to {selectedIds.length} Conversations
+              {t('inbox.addLabelTitle', { count: selectedIds.length })}
             </h3>
             <input
               type="text"
-              placeholder="e.g. VIP, Urgent, Refund..."
+              placeholder={t('inbox.labelInputPlaceholder')}
+              aria-label={t('inbox.labelInputPlaceholder')}
               value={bulkLabelInput}
               onChange={(e) => setBulkLabelInput(e.target.value)}
-              className="w-full p-2 text-xs rounded-[6px] border border-black/20 bg-[#f7f4e3] outline-none focus:border-[#3139fb]"
+              className="w-full p-2 text-xs rounded-[6px] border border-black/20 bg-[#f7f4e3] outline-none focus:border-[#3139fb] text-start focus-visible:ring-2 focus-visible:ring-[#3139fb]"
               autoFocus
             />
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setShowBulkLabelModal(false)}
-                className="px-3 py-1.5 text-xs text-[#696969] hover:text-black font-semibold cursor-pointer"
+                aria-label={t('common.cancel')}
+                className="px-3 py-1.5 text-xs text-[#696969] hover:text-black font-semibold cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmBulkLabel}
-                className="px-3 py-1.5 text-xs bg-[#3139fb] text-[#fffcec] font-bold rounded-[6px] hover:bg-[#000354] cursor-pointer"
+                aria-label={t('inbox.applyLabel')}
+                className="px-3 py-1.5 text-xs bg-[#3139fb] text-[#fffcec] font-bold rounded-[6px] hover:bg-[#000354] cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
               >
-                Apply Label
+                {t('inbox.applyLabel')}
               </button>
             </div>
           </div>
@@ -617,7 +669,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       {/* Command Palette Modal (Cmd+K / Ctrl+K) */}
       {isCommandPaletteOpen && (
         <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-start justify-center pt-24 p-4 z-50 animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('inbox.commandPalette')}
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-start justify-center pt-24 p-4 z-50 animate-fade-in text-start"
           onClick={() => setIsCommandPaletteOpen(false)}
         >
           <div
@@ -625,13 +680,14 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-3 border-b border-black/10 flex items-center gap-2.5 bg-[#f7f4e3]">
-              <span className="text-sm text-[#696969]">🔍</span>
+              <span className="text-sm text-[#696969]" aria-hidden="true">🔍</span>
               <input
                 type="text"
-                placeholder="Search conversations, navigate tabs, or run actions..."
+                placeholder={t('inbox.commandPlaceholder')}
+                aria-label={t('inbox.commandPlaceholder')}
                 value={paletteQuery}
                 onChange={(e) => setPaletteQuery(e.target.value)}
-                className="w-full bg-transparent text-sm text-black outline-none placeholder-[#696969]"
+                className="w-full bg-transparent text-sm text-black outline-none placeholder-[#696969] text-start focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 autoFocus
               />
               <span className="text-[10px] font-mono text-[#696969] bg-black/5 px-1.5 py-0.5 rounded border border-black/10">
@@ -644,16 +700,25 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               {paletteMatches.length > 0 && (
                 <div className="pb-2">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-[#696969] px-2 py-1">
-                    Conversations
+                    {t('inbox.conversations')}
                   </div>
                   {paletteMatches.map((conv) => (
                     <div
                       key={conv.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Jump to conversation with ${conv.contact.name}`}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          onSelectConversation(conv.id);
+                          setIsCommandPaletteOpen(false);
+                        }
+                      }}
                       onClick={() => {
                         onSelectConversation(conv.id);
                         setIsCommandPaletteOpen(false);
                       }}
-                      className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between"
+                      className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                     >
                       <div>
                         <div className="text-xs font-bold text-black">{conv.contact.name}</div>
@@ -672,54 +737,94 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               {/* Quick Actions */}
               <div className="pt-2 space-y-1">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-[#696969] px-2 py-1">
-                  Actions &amp; Filters
+                  {t('common.actions')}
                 </div>
                 <div
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setFilter('all');
+                      setIsCommandPaletteOpen(false);
+                    }
+                  }}
                   onClick={() => {
                     setFilter('all');
                     setIsCommandPaletteOpen(false);
                   }}
-                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black"
+                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 >
                   <span>Switch to Open Conversations</span>
                   <span className="text-[10px] font-mono text-[#696969]">Tab: Open</span>
                 </div>
                 <div
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setFilter('mine');
+                      setIsCommandPaletteOpen(false);
+                    }
+                  }}
                   onClick={() => {
                     setFilter('mine');
                     setIsCommandPaletteOpen(false);
                   }}
-                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black"
+                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 >
                   <span>Switch to My Conversations</span>
                   <span className="text-[10px] font-mono text-[#696969]">Tab: Mine</span>
                 </div>
                 <div
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setFilter('snoozed');
+                      setIsCommandPaletteOpen(false);
+                    }
+                  }}
                   onClick={() => {
                     setFilter('snoozed');
                     setIsCommandPaletteOpen(false);
                   }}
-                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black"
+                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 >
                   <span>View Snoozed Conversations</span>
                   <span className="text-[10px] font-mono text-[#696969]">Tab: Snooze</span>
                 </div>
                 <div
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setFilter('resolved');
+                      setIsCommandPaletteOpen(false);
+                    }
+                  }}
                   onClick={() => {
                     setFilter('resolved');
                     setIsCommandPaletteOpen(false);
                   }}
-                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black"
+                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 >
                   <span>View Resolved Conversations</span>
                   <span className="text-[10px] font-mono text-[#696969]">Tab: Done</span>
                 </div>
                 <div
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleTestSound();
+                      setIsCommandPaletteOpen(false);
+                    }
+                  }}
                   onClick={() => {
                     handleTestSound();
                     setIsCommandPaletteOpen(false);
                   }}
-                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black"
+                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 >
                   <span>Toggle / Test Inbound Chime Sound</span>
                   <span className="text-[10px] font-mono text-[#696969]">
@@ -727,11 +832,19 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                   </span>
                 </div>
                 <div
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleEnableDesktopNotifications();
+                      setIsCommandPaletteOpen(false);
+                    }
+                  }}
                   onClick={() => {
                     handleEnableDesktopNotifications();
                     setIsCommandPaletteOpen(false);
                   }}
-                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black"
+                  className="p-2 rounded-[8px] hover:bg-[#f7f4e3] cursor-pointer flex items-center justify-between text-xs font-semibold text-black focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 >
                   <span>Enable Browser Desktop Notifications</span>
                   <span className="text-[10px] font-mono text-[#696969]">Permission</span>
@@ -740,8 +853,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             </div>
 
             <div className="p-2.5 bg-[#f7f4e3] border-t border-black/10 flex items-center justify-between text-[11px] text-[#696969]">
-              <span>Tip: Press <kbd className="font-mono bg-black/5 px-1 py-0.5 rounded">j</kbd> and <kbd className="font-mono bg-black/5 px-1 py-0.5 rounded">k</kbd> to cycle chats without opening search</span>
-              <span className="font-mono text-[10px]">WhatsPulse 3B</span>
+              <span>{t('inbox.commandPaletteTip')}</span>
+              <span className="font-mono text-[10px]">WhatsPulse 4B</span>
             </div>
           </div>
         </div>

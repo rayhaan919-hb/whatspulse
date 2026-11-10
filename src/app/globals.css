@@ -1,26 +1,43 @@
 @import "tailwindcss";
 
 :root {
-  /* Core Arc Design System Palette (from arc.design.md) */
-  --arc-canvas: #fffcec;
-  --arc-surface: #f7f4e3;
-  --arc-surface-hover: #efeccf;
-  --arc-border: rgba(0, 0, 0, 0.12);
-  --arc-border-strong: #000000;
+  /* Warm Editorial Theme Palette */
+  --editorial-canvas: #fffcec;
+  --editorial-surface: #f7f4e3;
+  --editorial-surface-hover: #efeccf;
+  --editorial-border: rgba(0, 0, 0, 0.12);
+  --editorial-border-strong: #000000;
 
-  --arc-blue: #3139fb;
-  --arc-blue-deep: #2404aa;
-  --arc-blue-dark: #000354;
-  --arc-blue-soft: #96c4ff;
-  --arc-red: #fb3a4d;
+  --editorial-blue: #3139fb;
+  --editorial-blue-deep: #2404aa;
+  --editorial-blue-dark: #000354;
+  --editorial-blue-soft: #96c4ff;
+  --editorial-red: #fb3a4d;
 
-  --arc-ink: #000000;
-  --arc-ink-muted: #696969;
+  --editorial-ink: #000000;
+  --editorial-ink-muted: #696969;
+
+  /* Backward-compatible variable aliases */
+  --arc-canvas: var(--editorial-canvas);
+  --arc-surface: var(--editorial-surface);
+  --arc-surface-hover: var(--editorial-surface-hover);
+  --arc-border: var(--editorial-border);
+  --arc-border-strong: var(--editorial-border-strong);
+  --arc-blue: var(--editorial-blue);
+  --arc-blue-deep: var(--editorial-blue-deep);
+  --arc-blue-dark: var(--editorial-blue-dark);
+  --arc-blue-soft: var(--editorial-blue-soft);
+  --arc-red: var(--editorial-red);
+  --arc-ink: var(--editorial-ink);
+  --arc-ink-muted: var(--editorial-ink-muted);
 
   /* Elevation */
-  --shadow-arc-sm: 0 5px 10px rgba(0, 0, 0, 0.08);
-  --shadow-arc-md: 0 8px 30px rgba(0, 0, 0, 0.12);
-  --shadow-arc-lg: 0 30px 60px rgba(0, 0, 0, 0.12);
+  --shadow-editorial-sm: 0 5px 10px rgba(0, 0, 0, 0.08);
+  --shadow-editorial-md: 0 8px 30px rgba(0, 0, 0, 0.12);
+  --shadow-editorial-lg: 0 30px 60px rgba(0, 0, 0, 0.12);
+  --shadow-arc-sm: var(--shadow-editorial-sm);
+  --shadow-arc-md: var(--shadow-editorial-md);
+  --shadow-arc-lg: var(--shadow-editorial-lg);
 
   /* Radii */
   --radius-cta: 22px;
@@ -32,8 +49,8 @@
 
 html,
 body {
-  background-color: var(--arc-canvas);
-  color: var(--arc-ink);
+  background-color: var(--editorial-canvas);
+  color: var(--editorial-ink);
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   margin: 0;
   padding: 0;
@@ -43,7 +60,28 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Arc Typographic Utilities */
+/* RTL & Logical Direction Layout Helpers */
+[dir="rtl"] {
+  direction: rtl;
+}
+
+[dir="ltr"] {
+  direction: ltr;
+}
+
+/* High-Contrast Accessible Focus Rings (WCAG AA) */
+:focus-visible {
+  outline: 2px solid var(--editorial-blue);
+  outline-offset: 2px;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--editorial-blue);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--editorial-blue-soft);
+}
+
+/* Warm Editorial Typographic Utilities */
 .font-display-hero {
   font-size: clamp(28px, 4vw, 44px);
   font-weight: 700;
@@ -93,33 +131,36 @@ body {
   letter-spacing: 1.4px;
 }
 
-/* Arc Signature CTA Card (22px radius, black surface, navy hover) */
+/* Warm Editorial Signature CTA Card (22px radius, black surface, navy hover) */
+.editorial-cta-card,
 .arc-cta-card {
   min-height: 64px;
   border-radius: var(--radius-cta);
-  background-color: var(--arc-ink);
-  color: var(--arc-canvas);
+  background-color: var(--editorial-ink);
+  color: var(--editorial-canvas);
   padding: 10px 22px 10px 12px;
   display: inline-flex;
   align-items: center;
   gap: 14px;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: var(--shadow-arc-sm);
-  border: 1px solid var(--arc-ink);
+  box-shadow: var(--shadow-editorial-sm);
+  border: 1px solid var(--editorial-ink);
   cursor: pointer;
 }
 
+.editorial-cta-card:hover:not(:disabled),
 .arc-cta-card:hover:not(:disabled) {
-  background-color: var(--arc-blue-dark);
-  color: var(--arc-canvas);
+  background-color: var(--editorial-blue-dark);
+  color: var(--editorial-canvas);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-arc-md);
+  box-shadow: var(--shadow-editorial-md);
 }
 
-/* Arc Primary Pill Button (Compact for inline composer/header use) */
+/* Warm Editorial Primary Pill Button */
+.editorial-btn-primary,
 .arc-btn-primary {
-  background-color: var(--arc-ink);
-  color: var(--arc-canvas);
+  background-color: var(--editorial-ink);
+  color: var(--editorial-canvas);
   border-radius: 12px;
   padding: 10px 18px;
   font-size: 13px;
@@ -129,19 +170,21 @@ body {
   justify-content: center;
   gap: 8px;
   transition: all 0.15s ease;
-  border: 1px solid var(--arc-ink);
+  border: 1px solid var(--editorial-ink);
   cursor: pointer;
 }
 
+.editorial-btn-primary:hover:not(:disabled),
 .arc-btn-primary:hover:not(:disabled) {
-  background-color: var(--arc-blue-dark);
+  background-color: var(--editorial-blue-dark);
 }
 
-/* Arc Secondary Button (Cream canvas + 1px ink border) */
+/* Warm Editorial Secondary Button (Cream canvas + 1px ink border) */
+.editorial-btn-secondary,
 .arc-btn-secondary {
-  background-color: var(--arc-canvas);
-  color: var(--arc-ink);
-  border: 1px solid var(--arc-ink);
+  background-color: var(--editorial-canvas);
+  color: var(--editorial-ink);
+  border: 1px solid var(--editorial-ink);
   border-radius: 10px;
   padding: 8px 14px;
   font-size: 13px;
@@ -154,14 +197,16 @@ body {
   cursor: pointer;
 }
 
+.editorial-btn-secondary:hover:not(:disabled),
 .arc-btn-secondary:hover:not(:disabled) {
-  background-color: var(--arc-surface-hover);
+  background-color: var(--editorial-surface-hover);
 }
 
-/* Arc Inputs (1px ink border, 2px #96c4ff focus ring) */
+/* Warm Editorial Inputs */
+.editorial-input,
 .arc-input {
-  background-color: var(--arc-canvas);
-  color: var(--arc-ink);
+  background-color: var(--editorial-canvas);
+  color: var(--editorial-ink);
   border: 1px solid rgba(0, 0, 0, 0.35);
   border-radius: 8px;
   padding: 9px 12px;
@@ -170,9 +215,23 @@ body {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.editorial-input:focus,
 .arc-input:focus {
-  border-color: var(--arc-blue);
-  box-shadow: 0 0 0 3px var(--arc-blue-soft);
+  border-color: var(--editorial-blue);
+  box-shadow: 0 0 0 3px var(--editorial-blue-soft);
+}
+
+/* Screen reader only utility for accessibility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 /* Hide scrollbars where needed */
@@ -184,7 +243,7 @@ body {
   scrollbar-width: none;
 }
 
-/* Custom Scrollbar in subtle Arc tones */
+/* Custom Scrollbar in subtle Warm Editorial tones */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
