@@ -206,3 +206,51 @@ This log tracks all completed stops, architectural decisions, migration records,
 - **Skipped & Rationale:**
   - None.
 - **Status:** Complete / Ready for Review
+
+---
+
+## [STOP 3B] Phase 3B — Real-Time Collaboration, Extensibility API & Demo Isolation
+- **Date / Timestamp:** 2026-11-11T04:25:00+05:00
+- **Git Branch:** `phase-3b-collab-api`
+- **Files Changed:**
+  - `src/types/crm.ts` (Added `isDemo?: boolean` to Workspace, Contact, Message, Conversation, BroadcastCampaign; added `WorkspaceApiKey`, `OutboundWebhookSubscription`, `OutboundWebhookDelivery`, `AgentPresence`, `UserInboxPreferences`)
+  - `src/lib/api/api-keys.ts` (Created ApiKeyService: `generateApiKey` with `wp_live_` prefix, SHA-256 `hashKey` at rest, constant-time `verifyApiKey` with `crypto.timingSafeEqual`, `authenticateRequest`)
+  - `src/lib/webhooks/outbound-webhook.ts` (Created OutboundWebhookService: `signPayload` with HMAC-SHA256 on `${timestamp}.${payload}`, `verifyOutboundSignature` with 5-minute replay tolerance window, `createDeliveryRecord`)
+  - `src/lib/demo/demo-isolation.ts` (Created DemoIsolationService: `filterProductionOnly`, `purgeDemoData` selectively deleting ONLY `isDemo: true` records to preserve 100% of user data, `tagAsDemo`)
+  - `src/lib/realtime/presence.ts` (Created PresenceService: `detectCollision` detecting teammates viewing/typing in the same conversation, `claimOnReply` auto-assigning chat on response)
+  - `src/lib/audio/sound.ts` (Created Web Audio API synthesized 2-tone gentle chime `playInboundChime` without external audio assets, `requestBrowserNotifications`, `showInboundNotification`)
+  - `src/app/api/v1/messages/route.ts` (Created REST API endpoint for sending WhatsApp messages authenticated with Bearer `wp_live_...` keys)
+  - `src/app/api/v1/contacts/route.ts` (Created REST API endpoint for listing and creating contacts with Bearer authentication)
+  - `src/app/api/v1/conversations/route.ts` (Created REST API endpoint for listing workspace conversations with status filtering and Bearer authentication)
+  - `docs/openapi.yaml` (Created full OpenAPI 3.1 specification for `/api/v1/messages`, `/api/v1/contacts`, `/api/v1/conversations`, auth scheme, schemas, and outbound webhook event schemas)
+  - `supabase/migrations/20261113_02_api_and_demo_isolation.sql` (Creates `workspace_api_keys`, `outbound_webhooks`, `outbound_webhook_deliveries`, adds `is_demo` boolean and partial indexes across `workspaces`, `contacts`, `conversations`, `messages`, `broadcast_campaigns`)
+  - `src/components/inbox/ChatWindow.tsx` (Collision alert banner, claim-on-reply integration, bubble receipt progression `pending`/🕒, `sent`/✓, `delivered`/✓✓, `read`/blue ✓✓, `failed`/⚠️ with retry, voice note audio simulation & media attachment simulation with waveform and image thumbnails)
+  - `src/components/inbox/ConversationList.tsx` (Keyboard shortcuts `j`/`k` conversation cycling, `Cmd+K`/`Ctrl+K` command palette modal, multi-select checkboxes with floating Bulk Actions Bar: Done, Open, Assign, +Label, sound toggle with chime test)
+  - `src/components/settings/WabaSettings.tsx` (Section 4: Workspace API Keys with single-reveal modal, prefix list, revocation; Section 5: Outbound Webhooks registration, active endpoint list, and delivery retry log table)
+  - `src/lib/storage.ts` (Tagged all demo records in `DEMO_WORKSPACE`, `DEMO_CONTACTS`, `DEMO_CONVERSATIONS`, `DEMO_MESSAGES`, `DEMO_CAMPAIGNS` with `isDemo: true`)
+  - `src/app/page.tsx` (Integrated `DemoIsolationService.purgeDemoData` inside `clearDemoData` so real data is never lost, wired bulk actions, played synthesized chime and browser notifications on inbound messages)
+  - `test-e2e.mjs` (Added 11 automated tests across Groups 29, 30, 31, 32; total 101/101 tests passed)
+- **Migrations Added:**
+  - `supabase/migrations/20261113_02_api_and_demo_isolation.sql`:
+    - Creates `public.workspace_api_keys` (`id`, `workspace_id`, `name`, `key_prefix`, `key_hash`, `last_used_at`, `revoked_at`, `created_at`, `UNIQUE(key_hash)`)
+    - Creates `public.outbound_webhooks` (`id`, `workspace_id`, `endpoint_url`, `secret_key`, `events`, `is_active`, `created_at`)
+    - Creates `public.outbound_webhook_deliveries` (`id`, `subscription_id`, `workspace_id`, `event`, `payload`, `response_status`, `status`, `attempts`, `last_error`, `created_at`)
+    - Adds `is_demo BOOLEAN NOT NULL DEFAULT FALSE` and partial indexes `WHERE is_demo = TRUE` to `workspaces`, `contacts`, `conversations`, `messages`, and `broadcast_campaigns`
+- **Environment Variables Added:**
+  - None required.
+- **Tests Added & Results:**
+  - 11 new automated tests in `test-e2e.mjs` (101/101 passed, 100%):
+    - Group 29: API key generated with `wp_live_` prefix, hashed at rest (SHA-256), plaintext never stored in DB record; constant-time verification accepts valid keys and rejects tampered keys; Bearer token resolution against stored keys
+    - Group 30: Outbound webhook payload signed with HMAC-SHA256 digest; signature validated within tolerance window; replayed webhook older than tolerance window strictly rejected; tampered payload rejected
+    - Group 31: `filterProductionOnly` isolates production records; `purgeDemoData` during Clear Sample Data safely removes only `isDemo: true` records, leaving real records 100% untouched
+    - Group 32: Agent collision detected when teammate is viewing/typing in chat; claim-on-reply automatically assigns conversation to replying agent
+  - TypeScript strict: PASS (`tsc --noEmit` exited 0)
+  - Next.js Turbopack build: PASS (12/12 routes compiled cleanly, including `/api/v1/messages`, `/api/v1/contacts`, `/api/v1/conversations`)
+  - ESLint: PASS (0 errors, 0 warnings)
+  - E2E Tests: 101/101 passed (100%)
+- **// VERIFY Items:**
+  - Confirmed: Outbound webhook signature specification uses `X-WhatsPulse-Signature-256: t=<timestamp>,v1=<hex_hmac>` with a 300-second replay tolerance window to prevent replay attacks.
+  - Confirmed: API keys use `wp_live_` prefix for immediate log redaction and developer ergonomics; secret values are hashed with SHA-256 at rest and only prefix is visible in the database.
+- **Skipped & Rationale:**
+  - None.
+- **Status:** Complete / Ready for Review
