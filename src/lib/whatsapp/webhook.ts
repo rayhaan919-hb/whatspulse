@@ -33,11 +33,26 @@ export interface ParsedStatusUpdate {
   recipientId: string;
   status: MessageStatus;
   timestamp: string;
+  pricing?: {
+    billable: boolean;
+    pricingModel?: string;
+    category: string;
+    type?: string;
+  };
   error?: {
     code: number;
     title: string;
     message: string;
   };
+}
+
+// Meta Phone Quality & Messaging Limit Webhook Update (MV-04)
+export interface ParsedQualityUpdate {
+  displayPhoneNumber?: string;
+  phoneNumberId?: string;
+  event?: string;
+  currentLimit?: string;
+  qualityRating?: string;
 }
 
 // Meta Template Lifecycle Webhook Update (MV-03)
@@ -253,6 +268,9 @@ export class WebhookProcessor {
       }
 
       message.status = statusUpdate.status;
+      if (statusUpdate.pricing) {
+        message.pricing = statusUpdate.pricing;
+      }
       if (statusUpdate.error) {
         message.errorCode = statusUpdate.error.code;
         message.errorDetails = statusUpdate.error;
@@ -284,14 +302,16 @@ export class WebhookProcessor {
     incomingMessages: ParsedIncomingMessage[];
     statusUpdates: ParsedStatusUpdate[];
     templateUpdates: ParsedTemplateUpdate[];
+    qualityUpdates: ParsedQualityUpdate[];
   } {
     const incomingMessages: ParsedIncomingMessage[] = [];
     const statusUpdates: ParsedStatusUpdate[] = [];
     const templateUpdates: ParsedTemplateUpdate[] = [];
+    const qualityUpdates: ParsedQualityUpdate[] = [];
     let phoneNumberId: string | undefined;
 
     if (!payload?.entry) {
-      return { phoneNumberId, incomingMessages, statusUpdates, templateUpdates };
+      return { phoneNumberId, incomingMessages, statusUpdates, templateUpdates, qualityUpdates };
     }
 
     for (const entry of payload.entry) {
@@ -372,11 +392,24 @@ export class WebhookProcessor {
         // 2. Process Status Receipts
         if (val.statuses) {
           for (const st of val.statuses) {
+            const stObj = st as Record<string, any>;
+            let pricing: ParsedStatusUpdate['pricing'];
+
+            if (stObj.pricing) {
+              pricing = {
+                billable: Boolean(stObj.pricing.billable),
+                pricingModel: stObj.pricing.pricing_model || stObj.pricing.pricingModel,
+                category: stObj.pricing.category,
+                type: stObj.pricing.type,
+              };
+            }
+
             statusUpdates.push({
               messageId: st.id,
               recipientId: st.recipient_id,
               status: st.status as MessageStatus,
               timestamp: new Date(Number(st.timestamp) * 1000).toISOString(),
+              pricing,
               error: st.errors?.[0],
             });
           }
@@ -389,7 +422,7 @@ export class WebhookProcessor {
         if (
           changeField === 'message_template_status_update' ||
           changeField === 'message_template_quality_update' ||
-          valObj.event
+          (valObj.event && !valObj.current_limit)
         ) {
           templateUpdates.push({
             event: valObj.event || 'STATUS_UPDATE',
@@ -402,9 +435,24 @@ export class WebhookProcessor {
             qualityRating: valObj.quality_score?.score || valObj.quality_rating,
           });
         }
+
+        // 4. Process Phone Number Quality & Tier Limit Updates (MV-04)
+        if (
+          changeField === 'phone_number_quality_update' ||
+          valObj.current_limit ||
+          (valObj.event && valObj.event.startsWith('ON_'))
+        ) {
+          qualityUpdates.push({
+            displayPhoneNumber: valObj.display_phone_number,
+            phoneNumberId: valObj.phone_number_id,
+            event: valObj.event,
+            currentLimit: valObj.current_limit,
+            qualityRating: valObj.quality_score?.score || valObj.quality_rating,
+          });
+        }
       }
     }
 
-    return { phoneNumberId, incomingMessages, statusUpdates, templateUpdates };
+    return { phoneNumberId, incomingMessages, statusUpdates, templateUpdates, qualityUpdates };
   }
 }

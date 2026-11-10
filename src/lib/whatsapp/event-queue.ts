@@ -10,13 +10,17 @@ import type {
   PendingStatusRecord,
 } from '../../types/crm';
 import { WebhookProcessor } from './webhook';
+import { ComplianceService } from './compliance';
+import { QualityMonitoringService } from './quality';
 import { DEFAULT_TEMPLATES } from '../storage';
-import type { MessageTemplate } from '../../types/crm';
+import type { MessageTemplate, OptInLedgerEntry, InAppAlert } from '../../types/crm';
 
 // In-memory durable event buffer (mirrors public.webhook_events table)
 export const IN_MEMORY_WEBHOOK_EVENTS: WebhookEventRecord[] = [];
 export const IN_MEMORY_PENDING_STATUSES: PendingStatusRecord[] = [];
 export const IN_MEMORY_MESSAGES: Message[] = [];
+export const IN_MEMORY_OPT_LEDGER: OptInLedgerEntry[] = [];
+export const IN_MEMORY_ALERTS: InAppAlert[] = [];
 
 export interface EventProcessResult {
   eventId: string;
@@ -24,6 +28,7 @@ export interface EventProcessResult {
   processedMessages: number;
   processedStatuses: number;
   processedTemplates?: number;
+  processedQualityUpdates?: number;
   error?: string;
 }
 
@@ -65,15 +70,24 @@ export class WebhookEventQueue {
 
     try {
       const workspaceId = event.workspaceId || 'ws_prod_01';
-      const { incomingMessages, statusUpdates, templateUpdates } = WebhookProcessor.parsePayload(event.payload);
+      const { incomingMessages, statusUpdates, templateUpdates, qualityUpdates } = WebhookProcessor.parsePayload(event.payload);
 
       let processedMessages = 0;
       let processedStatuses = 0;
       let processedTemplates = 0;
+      let processedQualityUpdates = 0;
 
-      // 1. Process Messages (Idempotent + early status resolution)
+      // 1. Process Messages (Idempotent + early status resolution + compliance keyword opt-out/in)
       for (const msg of incomingMessages) {
         WebhookProcessor.processIncomingMessage(workspaceId, msg, messageStore, pendingStatusStore);
+        ComplianceService.processInboundKeyword(
+          {
+            text: msg.body,
+            workspaceId,
+            phoneNumber: msg.from,
+          },
+          IN_MEMORY_OPT_LEDGER
+        );
         processedMessages += 1;
       }
 
@@ -105,6 +119,16 @@ export class WebhookEventQueue {
         processedTemplates += 1;
       }
 
+      // 4. Process Phone Quality & Messaging Limit Updates (MV-04)
+      for (const q of qualityUpdates || []) {
+        QualityMonitoringService.processQualityUpdate(
+          q,
+          workspaceId,
+          IN_MEMORY_ALERTS
+        );
+        processedQualityUpdates += 1;
+      }
+
       event.status = 'completed';
       event.processedAt = new Date().toISOString();
 
@@ -114,6 +138,7 @@ export class WebhookEventQueue {
         processedMessages,
         processedStatuses,
         processedTemplates,
+        processedQualityUpdates,
       };
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);

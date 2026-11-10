@@ -26,6 +26,13 @@ export interface WorkspaceMember {
   isOnline?: boolean;
 }
 
+export type AllowanceScope = 'waba' | 'phone_number';
+
+export interface ScopeConfig {
+  freeServiceMessagesMonthly: number;
+  allowanceScope: AllowanceScope;
+}
+
 export interface WABAConfig {
   id: string;
   workspaceId: string;
@@ -35,10 +42,32 @@ export interface WABAConfig {
   accessToken: string;
   webhookVerifyToken: string;
   qualityRating: 'GREEN' | 'YELLOW' | 'RED';
+  messagingLimit?: 'TIER_1K' | 'TIER_10K' | 'TIER_100K' | 'TIER_UNLIMITED' | string;
+  allowanceScope?: AllowanceScope;
+  freeServiceMessagesMonthly?: number;
   isActive: boolean;
 }
 
 export type OptStatus = 'opted_in' | 'opted_out' | 'unknown';
+export type OptInSource = 'keyword_stop' | 'keyword_start' | 'web_form' | 'checkout_checkbox' | 'api' | 'manual_admin' | 'import';
+
+export interface OptInLedgerEntry {
+  id: string;
+  workspaceId: string;
+  contactId?: string;
+  phoneNumber: string;
+  status: OptStatus;
+  source: OptInSource;
+  timestamp: string;
+  evidenceNote?: string;
+}
+
+export interface MessagePricing {
+  billable: boolean;
+  pricingModel?: string; // e.g. 'CBP'
+  category: 'marketing' | 'utility' | 'service' | 'authentication' | string;
+  type?: string;
+}
 
 export interface Contact {
   id: string;
@@ -58,6 +87,7 @@ export interface Message {
   id: string;
   conversationId: string;
   workspaceId: string;
+  campaignId?: string;
   waMessageId?: string; // wamid.HBgL...
   senderType: SenderType;
   senderId?: string;
@@ -66,6 +96,7 @@ export interface Message {
   content: string;
   mediaUrl?: string;
   mediaType?: string;
+  pricing?: MessagePricing;
   interactiveData?: {
     type?: 'button' | 'list';
     buttons?: Array<{ id: string; title: string }>;
@@ -76,6 +107,40 @@ export interface Message {
   errorDetails?: { code: number; title: string; message: string } | string;
   isInternalNote?: boolean;
   createdAt: string;
+}
+
+export interface RateCard {
+  id?: string;
+  workspaceId?: string;
+  currency: string;
+  rates: {
+    marketing: number;
+    utility: number;
+    service: number;
+    authentication: number;
+  };
+  countryRates?: Record<string, Record<string, number>>;
+}
+
+export interface PhoneQualityLog {
+  id: string;
+  workspaceId: string;
+  phoneNumberId?: string;
+  displayPhoneNumber?: string;
+  qualityRating: 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN';
+  messagingLimit?: string;
+  event?: string;
+  createdAt: string;
+}
+
+export interface InAppAlert {
+  id: string;
+  workspaceId: string;
+  level: 'info' | 'warning' | 'danger';
+  title: string;
+  message: string;
+  acknowledged: boolean;
+  timestamp: string;
 }
 
 export interface WebhookEventRecord {
