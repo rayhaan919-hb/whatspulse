@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+:root {
+  /* Core Arc Design System Palette (from arc.design.md) */
+  --arc-canvas: #fffcec;
+  --arc-surface: #f7f4e3;
+  --arc-surface-hover: #efeccf;
+  --arc-border: rgba(0, 0, 0, 0.12);
+  --arc-border-strong: #000000;
+
+  --arc-blue: #3139fb;
+  --arc-blue-deep: #2404aa;
+  --arc-blue-dark: #000354;
+  --arc-blue-soft: #96c4ff;
+  --arc-red: #fb3a4d;
+
+  --arc-ink: #000000;
+  --arc-ink-muted: #696969;
+
+  /* Elevation */
+  --shadow-arc-sm: 0 5px 10px rgba(0, 0, 0, 0.08);
+  --shadow-arc-md: 0 8px 30px rgba(0, 0, 0, 0.12);
+  --shadow-arc-lg: 0 30px 60px rgba(0, 0, 0, 0.12);
+
+  /* Radii */
+  --radius-cta: 22px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: var(--arc-canvas);
+  color: var(--arc-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Arc Typographic Utilities */
+.font-display-hero {
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -1.6px;
+}
+
+.font-display-lg {
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -1.2px;
+}
+
+.font-display-md {
+  font-size: clamp(20px, 2.2vw, 26px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.8px;
+}
+
+.font-dek-lg {
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.font-dek-md {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.font-eyebrow {
+  font-family: ui-monospace, Menlo, Monaco, "Cascadia Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.font-eyebrow-loose {
+  font-family: ui-monospace, Menlo, Monaco, "Cascadia Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+}
+
+/* Arc Signature CTA Card (22px radius, black surface, navy hover) */
+.arc-cta-card {
+  min-height: 64px;
+  border-radius: var(--radius-cta);
+  background-color: var(--arc-ink);
+  color: var(--arc-canvas);
+  padding: 10px 22px 10px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-arc-sm);
+  border: 1px solid var(--arc-ink);
+  cursor: pointer;
+}
+
+.arc-cta-card:hover:not(:disabled) {
+  background-color: var(--arc-blue-dark);
+  color: var(--arc-canvas);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-arc-md);
+}
+
+/* Arc Primary Pill Button (Compact for inline composer/header use) */
+.arc-btn-primary {
+  background-color: var(--arc-ink);
+  color: var(--arc-canvas);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+  border: 1px solid var(--arc-ink);
+  cursor: pointer;
+}
+
+.arc-btn-primary:hover:not(:disabled) {
+  background-color: var(--arc-blue-dark);
+}
+
+/* Arc Secondary Button (Cream canvas + 1px ink border) */
+.arc-btn-secondary {
+  background-color: var(--arc-canvas);
+  color: var(--arc-ink);
+  border: 1px solid var(--arc-ink);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.arc-btn-secondary:hover:not(:disabled) {
+  background-color: var(--arc-surface-hover);
+}
+
+/* Arc Inputs (1px ink border, 2px #96c4ff focus ring) */
+.arc-input {
+  background-color: var(--arc-canvas);
+  color: var(--arc-ink);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.arc-input:focus {
+  border-color: var(--arc-blue);
+  box-shadow: 0 0 0 3px var(--arc-blue-soft);
+}
+
+/* Hide scrollbars where needed */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom Scrollbar in subtle Arc tones */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.35);
+}
