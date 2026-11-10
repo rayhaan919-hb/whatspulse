@@ -123,13 +123,14 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
   },
 ];
 
-// --- DEMO DATASET (Available for preview / sandbox testing) ---
+// --- DEMO DATASET (Available for preview / sandbox testing - tagged with isDemo: true) ---
 
 export const DEMO_WORKSPACE: Workspace = {
   id: 'ws_demo_01',
   name: 'PulseCommerce Worldwide (Demo)',
   slug: 'pulsecommerce-demo',
   plan: 'agency',
+  isDemo: true,
   createdAt: '2026-01-15T08:00:00Z',
   autoAssignmentMode: 'round_robin',
   businessHours: {
@@ -202,6 +203,7 @@ export const DEMO_CONTACTS: Contact[] = [
       'Account Tier': 'Gold ($5,000/mo)',
       Country: 'United States',
     },
+    isDemo: true,
     lastInteractionAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
   },
   {
@@ -216,6 +218,7 @@ export const DEMO_CONTACTS: Contact[] = [
       Company: 'Oswald Agency UK',
       Country: 'United Kingdom',
     },
+    isDemo: true,
     lastInteractionAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
   },
 ];
@@ -225,7 +228,7 @@ export const DEMO_CONVERSATIONS: Conversation[] = [
     id: 'conv_01',
     workspaceId: 'ws_demo_01',
     contactId: 'cnt_01',
-    contact: DEMO_CONTACTS[0],
+    contact: { ...DEMO_CONTACTS[0], isDemo: true },
     assignedTo: 'mem_01',
     assignedAgent: DEMO_MEMBERS[0],
     status: 'open',
@@ -237,12 +240,13 @@ export const DEMO_CONVERSATIONS: Conversation[] = [
     tags: ['VIP Client', 'Enterprise'],
     labels: ['VIP', 'Enterprise', 'Contract'],
     snoozedUntil: null,
+    isDemo: true,
   },
   {
     id: 'conv_02',
     workspaceId: 'ws_demo_01',
     contactId: 'cnt_02',
-    contact: DEMO_CONTACTS[1],
+    contact: { ...DEMO_CONTACTS[1], isDemo: true },
     assignedTo: 'mem_02',
     assignedAgent: DEMO_MEMBERS[1],
     status: 'open',
@@ -254,6 +258,7 @@ export const DEMO_CONVERSATIONS: Conversation[] = [
     tags: ['Lead - High Intent'],
     labels: ['Sales', 'Quote'],
     snoozedUntil: null,
+    isDemo: true,
   },
 ];
 
@@ -268,6 +273,7 @@ export const DEMO_MESSAGES: Message[] = [
     messageType: 'text',
     content: 'Hi Sarah, checking in regarding our Q4 enterprise expansion agreement.',
     status: 'read',
+    isDemo: true,
     createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
   },
   {
@@ -280,6 +286,7 @@ export const DEMO_MESSAGES: Message[] = [
     messageType: 'text',
     content: 'Hello Marcus! Good to hear from you. The legal team reviewed the SLA addendum this morning.',
     status: 'read',
+    isDemo: true,
     createdAt: new Date(Date.now() - 22 * 60 * 1000).toISOString(),
   },
   {
@@ -293,6 +300,7 @@ export const DEMO_MESSAGES: Message[] = [
     content: 'Client requested guaranteed 99.99% uptime with 15-minute response SLA.',
     status: 'read',
     isInternalNote: true,
+    isDemo: true,
     createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
   },
   {
@@ -305,6 +313,7 @@ export const DEMO_MESSAGES: Message[] = [
     messageType: 'text',
     content: 'Can you confirm if our dedicated account manager has verified the contract extension?',
     status: 'delivered',
+    isDemo: true,
     createdAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
   },
 ];
@@ -323,6 +332,7 @@ export const DEMO_CAMPAIGNS: BroadcastCampaign[] = [
     readCount: 1042,
     failedCount: 32,
     status: 'completed',
+    isDemo: true,
     completedAt: '2026-10-28T14:30:00Z',
     createdAt: '2026-10-28T10:00:00Z',
   },
