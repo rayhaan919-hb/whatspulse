@@ -16,6 +16,7 @@ export interface Workspace {
   createdAt: string;
   autoAssignmentMode?: AutoAssignmentMode;
   businessHours?: BusinessHoursConfig;
+  isDemo?: boolean;
 }
 
 export interface WorkspaceMember {
@@ -83,6 +84,7 @@ export interface Contact {
   optStatus?: OptStatus;
   isBlocked?: boolean;
   lastInteractionAt: string;
+  isDemo?: boolean;
 }
 
 export interface Message {
@@ -109,6 +111,7 @@ export interface Message {
   errorDetails?: { code: number; title: string; message: string } | string;
   isInternalNote?: boolean;
   createdAt: string;
+  isDemo?: boolean;
 }
 
 export interface RateCard {
@@ -194,6 +197,7 @@ export interface Conversation {
   labels?: string[];
   snoozedUntil?: string | null;
   lastAfterHoursReplyAt?: string | null;
+  isDemo?: boolean;
 }
 
 export interface CannedReply {
@@ -303,6 +307,7 @@ export interface BroadcastCampaign {
   scheduledAt?: string;
   completedAt?: string;
   createdAt: string;
+  isDemo?: boolean;
 }
 
 // Meta WhatsApp Cloud API Webhook Types
@@ -347,3 +352,52 @@ export interface MetaWebhookPayload {
     }>;
   }>;
 }
+
+export interface WorkspaceApiKey {
+  id: string;
+  workspaceId: string;
+  name: string;
+  keyPrefix: string;
+  keyHash: string;
+  lastUsedAt?: string | null;
+  revokedAt?: string | null;
+  createdAt: string;
+}
+
+export interface OutboundWebhookSubscription {
+  id: string;
+  workspaceId: string;
+  endpointUrl: string;
+  secretKey: string;
+  events: string[];
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface OutboundWebhookDelivery {
+  id: string;
+  subscriptionId?: string;
+  workspaceId: string;
+  event: string;
+  payload: unknown;
+  responseStatus?: number;
+  status: 'delivered' | 'failed' | 'retrying';
+  attempts: number;
+  lastError?: string;
+  createdAt: string;
+}
+
+export interface AgentPresence {
+  memberId: string;
+  fullName: string;
+  avatarUrl?: string;
+  conversationId: string;
+  isTyping: boolean;
+  lastActiveAt: string;
+}
+
+export interface UserInboxPreferences {
+  soundNotifications: boolean;
+  browserNotifications: boolean;
+}
+

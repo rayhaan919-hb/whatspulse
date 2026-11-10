@@ -32,8 +32,12 @@ const { AssignmentService } = await import('./src/lib/inbox/assignment.ts');
 const { BusinessHoursService } = await import('./src/lib/inbox/business-hours.ts');
 const { SnoozeService } = await import('./src/lib/inbox/snooze.ts');
 const { MentionService } = await import('./src/lib/inbox/mentions.ts');
+const { ApiKeyService } = await import('./src/lib/api/api-keys.ts');
+const { OutboundWebhookService } = await import('./src/lib/webhooks/outbound-webhook.ts');
+const { DemoIsolationService } = await import('./src/lib/demo/demo-isolation.ts');
+const { PresenceService } = await import('./src/lib/realtime/presence.ts');
 
-console.log('🚀 Starting WhatsPulse CRM Phase 3A Automated Test Suite...\n');
+console.log('🚀 Starting WhatsPulse CRM Phase 3B Automated Test Suite...\n');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -1357,14 +1361,169 @@ assert(
 );
 
 // ============================================================================
+// Group 29: Workspace API Key Generation, Hashing at Rest & Verification
+// ============================================================================
+console.log('\n--- Test Group 29: Workspace API Key Hashing at Rest & Verification ---');
+
+// 29.1 API Key generation: plaintext token starts with 'wp_live_', hash is 64 hex chars
+const generatedKey = ApiKeyService.generateApiKey('ws_prod_01', 'Zapier Automation Key');
+assert(
+  generatedKey.secretKey.startsWith('wp_live_') &&
+  generatedKey.secretKey.length >= 40 &&
+  generatedKey.keyRecord.keyHash.length === 64 &&
+  generatedKey.keyRecord.keyPrefix.startsWith('wp_live_') &&
+  !('secretKey' in generatedKey.keyRecord),
+  'API key generated with wp_live_ prefix, hashed at rest (SHA-256), plaintext never stored in DB record'
+);
+
+// 29.2 Verification of plaintext key against stored hash
+const isKeyValid = ApiKeyService.verifyApiKey(generatedKey.secretKey, generatedKey.keyRecord.keyHash);
+const isTamperedInvalid = ApiKeyService.verifyApiKey(generatedKey.secretKey + '_tampered', generatedKey.keyRecord.keyHash);
+assert(
+  isKeyValid === true && isTamperedInvalid === false,
+  'Constant-time verification accurately accepts matching secret key and rejects tampered keys'
+);
+
+// 29.3 Bearer token authentication
+const authSuccess = ApiKeyService.authenticateRequest(`Bearer ${generatedKey.secretKey}`, [generatedKey.keyRecord]);
+const authFail = ApiKeyService.authenticateRequest('Bearer wp_live_invalidkey1234567890', [generatedKey.keyRecord]);
+assert(
+  authSuccess?.id === generatedKey.keyRecord.id && authFail === null,
+  'API request bearer token properly resolved against stored workspace API keys'
+);
+
+// ============================================================================
+// Group 30: Outbound Webhook Signing (HMAC-SHA256), Replay Tolerance & Retries
+// ============================================================================
+console.log('\n--- Test Group 30: Outbound Webhook Signing & Replay Protection ---');
+
+const webhookSecret = 'whsec_test_secret_998877665544332211';
+const outboundPayload = {
+  event: 'message.received',
+  workspaceId: 'ws_prod_01',
+  timestamp: new Date().toISOString(),
+  data: {
+    messageId: 'wamid.HBgLTEST999',
+    from: '+14155552671',
+    body: 'Interested in enterprise pricing',
+  },
+};
+
+const nowSec = Math.floor(Date.now() / 1000);
+const signedWebhook = OutboundWebhookService.signPayload(outboundPayload, webhookSecret, nowSec);
+
+// 30.1 Correct signature calculation
+assert(
+  typeof signedWebhook.signature === 'string' &&
+  signedWebhook.signature.length === 64 &&
+  signedWebhook.timestamp === nowSec,
+  'Outbound webhook payload accurately signed with HMAC-SHA256 digest'
+);
+
+// 30.2 Signature verification with replay window check
+const isSigValid = OutboundWebhookService.verifyOutboundSignature(
+  outboundPayload,
+  signedWebhook.signature,
+  signedWebhook.timestamp,
+  webhookSecret,
+  300 // 5 min tolerance
+);
+assert(isSigValid === true, 'Outbound webhook signature validated successfully within tolerance window');
+
+// 30.3 Replay attack prevention: old timestamp rejected
+const staleTimestamp = nowSec - 600; // 10 minutes ago (> 5 min tolerance)
+const staleSignature = OutboundWebhookService.signPayload(outboundPayload, webhookSecret, staleTimestamp).signature;
+const isStaleRejected = OutboundWebhookService.verifyOutboundSignature(
+  outboundPayload,
+  staleSignature,
+  staleTimestamp,
+  webhookSecret,
+  300
+);
+assert(isStaleRejected === false, 'Replayed webhook with timestamp older than tolerance window is strictly rejected');
+
+// 30.4 Tampered payload detection
+const tamperedOutboundPayload = { ...outboundPayload, data: { ...outboundPayload.data, body: 'Tampered content' } };
+const isTamperedSigRejected = OutboundWebhookService.verifyOutboundSignature(
+  tamperedOutboundPayload,
+  signedWebhook.signature,
+  signedWebhook.timestamp,
+  webhookSecret,
+  300
+);
+assert(isTamperedSigRejected === false, 'Webhook with tampered payload is rejected by HMAC signature verification');
+
+// ============================================================================
+// Group 31: Strict is_demo Flag Isolation & Safe Purging
+// ============================================================================
+console.log('\n--- Test Group 31: Strict is_demo Flag Isolation & Safe Purging ---');
+
+const mixedConversations = [
+  { id: 'real_conv_01', isDemo: false, contact: { name: 'Acme Corp Real Customer' } },
+  { id: 'demo_conv_01', isDemo: true, contact: { name: 'Sample Marcus Vance' } },
+  { id: 'demo_conv_02', isDemo: true, contact: { name: 'Sample Elena Rostova' } },
+];
+
+// 31.1 Production filter ensures sample chats never leak into production exports
+const prodOnly = DemoIsolationService.filterProductionOnly(mixedConversations);
+assert(
+  prodOnly.length === 1 && prodOnly[0].id === 'real_conv_01',
+  'filterProductionOnly cleanly isolates production records and strips all isDemo: true rows'
+);
+
+// 31.2 Clear Sample Data safely purges ONLY demo records without touching real customer data
+const purgeResult = DemoIsolationService.purgeDemoData(mixedConversations);
+assert(
+  purgeResult.remaining.length === 1 &&
+  purgeResult.remaining[0].id === 'real_conv_01' &&
+  purgeResult.purgedCount === 2,
+  'Clear Sample Data operation safely purges only isDemo: true records and completely preserves real data'
+);
+
+// ============================================================================
+// Group 32: Realtime Agent Collision Detection & Claim-on-Reply Routing
+// ============================================================================
+console.log('\n--- Test Group 32: Collision Detection & Claim-on-Reply ---');
+
+const activeViewers = [
+  { memberId: 'mem_sarah', fullName: 'Sarah Jenkins', isTyping: true },
+  { memberId: 'mem_alex', fullName: 'Alex Rivera', isTyping: false },
+];
+
+// 32.1 Collision check: Alex is viewing while Sarah is typing
+const collisionForAlex = PresenceService.detectCollision(activeViewers, 'mem_alex');
+assert(
+  collisionForAlex.isCollision === true &&
+  collisionForAlex.collidingMembers[0] === 'Sarah Jenkins' &&
+  collisionForAlex.isAnyoneTyping === true,
+  'Agent collision accurately detected when another teammate is viewing or typing in the same chat'
+);
+
+// 32.2 Claim-on-reply: when Alex sends a reply to an unassigned chat, it automatically assigns to Alex
+const unassignedChat = {
+  id: 'conv_open_01',
+  assignedTo: undefined,
+  assignedAgent: undefined,
+};
+const claimedChat = PresenceService.claimOnReply(unassignedChat, {
+  id: 'mem_alex',
+  fullName: 'Alex Rivera',
+});
+assert(
+  claimedChat.assignedTo === 'mem_alex' &&
+  claimedChat.assignedAgent?.fullName === 'Alex Rivera',
+  'Claim-on-reply automatically assigns the conversation to the replying agent to prevent duplicate responses'
+);
+
+// ============================================================================
 // Final Summary
 // ============================================================================
 console.log(`\n======================================================`);
 console.log(`Test Results: ${passedTests}/${totalTests} tests passed (${Math.round((passedTests / totalTests) * 100)}%)`);
 if (passedTests === totalTests) {
-  console.log(`Phase 3A Core Inbox Productivity Verification Completed Successfully! 🚀`);
+  console.log(`Phase 3B Extensibility, Security & Collision Verification Completed Successfully! 🚀`);
 } else {
-  console.error(`❌ Some tests failed in Phase 3A verification.`);
+  console.error(`❌ Some tests failed in Phase 3B verification.`);
   process.exitCode = 1;
 }
 console.log(`======================================================\n`);
