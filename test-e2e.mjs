@@ -21,8 +21,11 @@ const { WebhookProcessor } = await import('./src/lib/whatsapp/webhook.ts');
 const { CareWindowService } = await import('./src/lib/whatsapp/care-window.ts');
 const { MetaErrorMapper } = await import('./src/lib/whatsapp/errors.ts');
 const { OutboundQueue } = await import('./src/lib/queue/outbound-queue.ts');
+const { CryptoService } = await import('./src/lib/whatsapp/crypto.ts');
+const { TemplateValidator } = await import('./src/lib/whatsapp/template-validator.ts');
+const { MediaStorageService } = await import('./src/lib/whatsapp/media.ts');
 
-console.log('🚀 Starting WhatsPulse CRM Phase 1B Automated Test Suite...\n');
+console.log('🚀 Starting WhatsPulse CRM Phase 1C Automated Test Suite...\n');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -608,14 +611,207 @@ assert(
 );
 
 // ============================================================================
+// Group 14: AES-256-GCM Token Encryption & Key Rotation Prefix
+// ============================================================================
+console.log('\n--- Test Group 14: AES-256-GCM Token Encryption & Key Rotation ---');
+
+const masterKeyV1 = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'; // 32 bytes hex
+const masterKeyV2 = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+const sampleToken = 'EAAGm0PX4ZCpsBAK987654321_meta_access_token_secret_sample';
+
+// 14.1 Encrypt with version prefix (v1)
+const encryptedV1 = CryptoService.encrypt(sampleToken, masterKeyV1, 'v1');
+assert(
+  encryptedV1.startsWith('v1:') && encryptedV1.split(':').length === 4,
+  'Encrypted token format starts with key version prefix (v1:iv:tag:ciphertext)'
+);
+
+// 14.2 Decrypt round trip returns exact plaintext
+const decryptedV1 = CryptoService.decrypt(encryptedV1, masterKeyV1);
+assert(
+  decryptedV1 === sampleToken,
+  'AES-256-GCM decrypt round trip reproduces exact original plaintext token'
+);
+
+// 14.3 Key rotation allows multiple active key versions
+const encryptedV2 = CryptoService.encrypt(sampleToken, masterKeyV2, 'v2');
+assert(
+  encryptedV2.startsWith('v2:'),
+  'Key rotation produces new ciphertext with v2 prefix'
+);
+
+const keyRing = { v1: masterKeyV1, v2: masterKeyV2 };
+const decryptedRotatedV1 = CryptoService.decryptWithKeyring(encryptedV1, keyRing);
+const decryptedRotatedV2 = CryptoService.decryptWithKeyring(encryptedV2, keyRing);
+assert(
+  decryptedRotatedV1 === sampleToken && decryptedRotatedV2 === sampleToken,
+  'Keyring successfully decrypts both v1 and v2 encrypted tokens (seamless key rotation)'
+);
+
+// 14.4 Tampered ciphertext is rejected by GCM authentication tag
+const tamperedEncrypted = encryptedV1.slice(0, -4) + 'abcd';
+let tamperCaught = false;
+try {
+  CryptoService.decrypt(tamperedEncrypted, masterKeyV1);
+} catch {
+  tamperCaught = true;
+}
+assert(
+  tamperCaught === true,
+  'Tampered ciphertext rejected by AES-GCM authentication tag verification'
+);
+
+// ============================================================================
+// Group 15: Secrets Table RLS Policy Contract
+// ============================================================================
+console.log('\n--- Test Group 15: Secrets Table RLS Security Contract ---');
+
+// Verify that workspace_secrets access is strictly restricted to service_role
+assert(
+  CryptoService.checkRlsAccess('anon') === false,
+  'RLS Policy Contract: anon role has zero read/select permission on workspace_secrets'
+);
+assert(
+  CryptoService.checkRlsAccess('authenticated') === false,
+  'RLS Policy Contract: authenticated client role has zero read/select permission on workspace_secrets'
+);
+assert(
+  CryptoService.checkRlsAccess('service_role') === true,
+  'RLS Policy Contract: only service_role is authorized to query workspace_secrets'
+);
+
+// ============================================================================
+// Group 16: Template Parameter Pre-Validation
+// ============================================================================
+console.log('\n--- Test Group 16: Template Parameter Count, Format & Media Header Pre-Validation ---');
+
+const testTemplate = {
+  id: 'tmpl_shipping_01',
+  name: 'order_status_update',
+  category: 'UTILITY',
+  headerType: 'IMAGE',
+  body: 'Hi {{1}}, your order {{2}} has been confirmed for {{3}}.',
+};
+
+// 16.1 Variable count mismatch (expected 3, provided 2) -> rejected before calling Meta
+const underCountResult = TemplateValidator.validate(testTemplate, {
+  bodyParams: ['Elena', 'ORD-9821'],
+  headerMediaUrl: 'https://example.com/receipt.jpg',
+});
+assert(
+  underCountResult.valid === false &&
+  underCountResult.errorCode === 132001 &&
+  underCountResult.reason.includes('mismatch'),
+  'Parameter count mismatch (expected 3, provided 2) rejected before calling Meta API'
+);
+
+// 16.2 Empty or whitespace variable -> rejected
+const emptyParamResult = TemplateValidator.validate(testTemplate, {
+  bodyParams: ['Elena', 'ORD-9821', '   '],
+  headerMediaUrl: 'https://example.com/receipt.jpg',
+});
+assert(
+  emptyParamResult.valid === false &&
+  emptyParamResult.reason.includes('empty'),
+  'Blank / whitespace variable rejected'
+);
+
+// 16.3 Missing required header media for IMAGE header -> rejected
+const missingMediaResult = TemplateValidator.validate(testTemplate, {
+  bodyParams: ['Elena', 'ORD-9821', 'Tomorrow'],
+  headerMediaUrl: '',
+});
+assert(
+  missingMediaResult.valid === false &&
+  missingMediaResult.errorCode === 132012,
+  'Missing header image for template with IMAGE header rejected with code 132012'
+);
+
+// 16.4 Fully valid template parameters -> accepted
+const validTemplateResult = TemplateValidator.validate(testTemplate, {
+  bodyParams: ['Elena', 'ORD-9821', 'Tomorrow'],
+  headerMediaUrl: 'https://example.com/receipt.jpg',
+});
+assert(
+  validTemplateResult.valid === true,
+  'Complete template parameters (body variables + header media) pass pre-validation'
+);
+
+// ============================================================================
+// Group 17: Inbound Media Download & Storage (Stubbed Meta Fetch)
+// ============================================================================
+console.log('\n--- Test Group 17: Inbound Media Download & Size Enforcement ---');
+
+// Mock a 1KB image fetch
+const mockImageFetch = async (url) => {
+  if (url.includes('graph.facebook.com')) {
+    return {
+      ok: true,
+      json: async () => ({
+        url: 'https://lookaside.fbsbx.com/sample_image.jpg',
+        mime_type: 'image/jpeg',
+        file_size: 1024,
+      }),
+    };
+  }
+  return {
+    ok: true,
+    headers: new Map([['content-type', 'image/jpeg'], ['content-length', '1024']]),
+    arrayBuffer: async () => new ArrayBuffer(1024),
+  };
+};
+
+const mediaDownloadResult = await MediaStorageService.downloadAndStoreMedia(
+  'media_id_sample_123',
+  'image/jpeg',
+  'test_token_abc',
+  'ws_prod_01',
+  mockImageFetch
+);
+
+assert(
+  mediaDownloadResult.success === true &&
+  mediaDownloadResult.storagePath.includes('ws_prod_01') &&
+  mediaDownloadResult.mimeType === 'image/jpeg' &&
+  mediaDownloadResult.sizeBytes === 1024,
+  'Inbound media downloaded from Meta Graph API and stored in Supabase storage path'
+);
+
+// 17.2 Enforce size limit (Reject image exceeding 16MB)
+const mockOversizedFetch = async (url) => {
+  return {
+    ok: true,
+    json: async () => ({
+      url: 'https://lookaside.fbsbx.com/oversized_image.jpg',
+      mime_type: 'image/jpeg',
+      file_size: 20 * 1024 * 1024, // 20 MB
+    }),
+  };
+};
+
+const oversizedResult = await MediaStorageService.downloadAndStoreMedia(
+  'media_id_oversized_456',
+  'image/jpeg',
+  'test_token_abc',
+  'ws_prod_01',
+  mockOversizedFetch
+);
+
+assert(
+  oversizedResult.success === false &&
+  oversizedResult.errorCode === 'MEDIA_TOO_LARGE',
+  'Oversized media (20MB image) rejected exceeding 16MB limit'
+);
+
+// ============================================================================
 // Final Summary
 // ============================================================================
 console.log(`\n======================================================`);
 console.log(`Test Results: ${passedTests}/${totalTests} tests passed (${Math.round((passedTests / totalTests) * 100)}%)`);
 if (passedTests === totalTests) {
-  console.log(`Phase 1B Outbound & Queue Verification Completed Successfully! 🚀`);
+  console.log(`Phase 1C Templates, Secrets & Media Verification Completed Successfully! 🚀`);
 } else {
-  console.error(`❌ Some tests failed in Phase 1B verification.`);
+  console.error(`❌ Some tests failed in Phase 1C verification.`);
   process.exitCode = 1;
 }
 console.log(`======================================================\n`);
