@@ -128,7 +128,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <>
             {/* 4 Unified KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-5 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-1.5">
+              <div className="p-5 rounded-2xl bg-gradient-to-b from-[#f7f4e3] to-[#f2efd6] border border-black/10 shadow-xs float-card space-y-1.5">
                 <div className="flex items-center justify-between font-eyebrow text-[10px] text-[#696969]">
                   <span>TOTAL MESSAGES</span>
                   <span>💬</span>
@@ -141,7 +141,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 </p>
               </div>
 
-              <div className="p-5 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-1.5">
+              <div className="p-5 rounded-2xl bg-gradient-to-b from-[#f7f4e3] to-[#f2efd6] border border-black/10 shadow-xs float-card space-y-1.5">
                 <div className="flex items-center justify-between font-eyebrow text-[10px] text-[#696969]">
                   <span>DELIVERY RATE</span>
                   <span>🛡️</span>
@@ -154,7 +154,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 </p>
               </div>
 
-              <div className="p-5 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-1.5">
+              <div className="p-5 rounded-2xl bg-gradient-to-b from-[#f7f4e3] to-[#f2efd6] border border-black/10 shadow-xs float-card space-y-1.5">
                 <div className="flex items-center justify-between font-eyebrow text-[10px] text-[#696969]">
                   <span>READ RATE</span>
                   <span>✓✓</span>
@@ -167,7 +167,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 </p>
               </div>
 
-              <div className="p-5 rounded-[12px] bg-[#f7f4e3] border border-black/15 space-y-1.5">
+              <div className="p-5 rounded-2xl bg-gradient-to-b from-[#f7f4e3] to-[#f2efd6] border border-black/10 shadow-xs float-card space-y-1.5">
                 <div className="flex items-center justify-between font-eyebrow text-[10px] text-[#696969]">
                   <span>AVG REPLY TIME</span>
                   <span>⚡</span>

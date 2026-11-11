@@ -43,7 +43,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="h-16 shrink-0 border-b border-black/10 bg-[#fffcec] px-4 md:px-6 flex items-center justify-between gap-4 z-20 select-none">
+    <header className="h-16 shrink-0 glass-header px-4 md:px-6 flex items-center justify-between gap-4 z-30 select-none sticky top-0 transition-colors">
       {/* Start: Brand & Workspace Title */}
       <div className="flex items-center gap-3 min-w-0">
         {onToggleSidebar && (
@@ -51,14 +51,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             onClick={onToggleSidebar}
             aria-label="Toggle navigation menu"
-            className="md:hidden p-2 rounded-[8px] border border-black/15 hover:bg-black/5 text-black shrink-0 focus-visible:ring-2 focus-visible:ring-[#3139fb]"
+            className="md:hidden p-2 rounded-xl border border-black/10 hover:bg-black/5 text-black shrink-0 transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-[#3139fb]"
             title="Toggle Navigation Menu"
           >
             ☰
           </button>
         )}
 
-        <div className="w-9 h-9 rounded-[10px] bg-black text-[#fffcec] flex items-center justify-center font-bold text-base tracking-tighter shrink-0">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-black via-[#000354] to-black text-[#fffcec] flex items-center justify-center font-bold text-base tracking-tighter shrink-0 shadow-sm shadow-black/20 border border-white/10 transition-transform hover:scale-105">
           W
         </div>
 
@@ -67,8 +67,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="font-bold text-black text-base tracking-tight truncate">
               {t('navbar.brand')}
             </span>
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#3139fb]/10 text-[#3139fb] border border-[#3139fb]/20 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3139fb]"></span>
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#3139fb]/10 text-[#3139fb] border border-[#3139fb]/25 shrink-0 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3139fb] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3139fb]"></span>
+              </span>
               {t('navbar.badge')}
             </span>
           </div>
@@ -85,7 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           type="button"
           onClick={toggleLanguage}
           aria-label={`Switch language: currently ${locale.toUpperCase()}. Click to switch to ${locale === 'en' ? 'Arabic (RTL)' : 'English (LTR)'}`}
-          className="px-2.5 py-1.5 rounded-[8px] bg-[#f7f4e3] hover:bg-[#efeccf] border border-black/15 text-xs font-semibold text-black transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#3139fb]"
+          className="px-3 py-1.5 rounded-xl bg-[#f7f4e3] hover:bg-[#efeccf] border border-black/10 text-xs font-semibold text-black transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#3139fb]"
           title="Switch Language (English / العربية)"
         >
           <span>{locale === 'en' ? '🇺🇸' : '🇸🇦'}</span>
@@ -95,7 +98,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
 
         {isDemoMode ? (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-[10px] bg-[#f7f4e3] border border-black/15 text-xs">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#f7f4e3] border border-black/10 text-xs shadow-2xs">
             <span className="text-[#696969] hidden sm:inline font-medium">
               {t('navbar.demoMode')}
             </span>
@@ -103,7 +106,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               type="button"
               onClick={onClearDemoData}
               aria-label={t('navbar.clearDemo')}
-              className="bg-black hover:bg-[#fb3a4d] text-[#fffcec] px-2.5 py-1 rounded-[6px] text-xs font-semibold transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
+              className="bg-black hover:bg-[#fb3a4d] text-[#fffcec] px-2.5 py-1 rounded-lg text-xs font-semibold transition-all duration-150 hover:shadow-xs active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
               title="Remove sample data and return to a clean workspace"
             >
               {t('navbar.clearDemo')} ✕
@@ -114,7 +117,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             onClick={onLoadDemoData}
             aria-label={t('navbar.loadDemo')}
-            className="px-3 py-1.5 rounded-[10px] bg-[#f7f4e3] hover:bg-[#efeccf] border border-black/20 text-black text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#3139fb]"
+            className="px-3 py-1.5 rounded-xl bg-[#f7f4e3] hover:bg-[#efeccf] border border-black/15 text-black text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#3139fb]"
             title="Load sample conversations and contacts to explore how the app works"
           >
             <span>✨</span>
@@ -129,12 +132,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => setShowNotifications((prev) => !prev)}
             aria-label={`${t('navbar.notifications')} (${memberNotifications.length} unread)`}
             aria-expanded={showNotifications}
-            className="w-8 h-8 rounded-[8px] bg-[#f7f4e3] hover:bg-[#efeccf] border border-black/15 flex items-center justify-center text-sm relative transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
+            className="w-9 h-9 rounded-xl bg-[#f7f4e3] hover:bg-[#efeccf] border border-black/10 flex items-center justify-center text-sm relative transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xs active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
             title="Notifications (@mentions)"
           >
             <span>🔔</span>
             {memberNotifications.length > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-[#3139fb] text-[#fffcec] rounded-full text-[9px] font-bold flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 bg-[#3139fb] text-[#fffcec] rounded-full text-[9px] font-bold flex items-center justify-center shadow-xs animate-pulse">
                 {memberNotifications.length}
               </span>
             )}
@@ -145,9 +148,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               role="dialog"
               aria-modal="false"
               aria-label={t('navbar.notifications')}
-              className="absolute end-0 top-full mt-2 w-80 bg-[#fffcec] border border-black/20 rounded-[12px] shadow-xl p-3 z-50 text-xs text-start"
+              className="absolute end-0 top-full mt-2 w-80 sm:w-96 bg-[#fffcec]/95 backdrop-blur-xl border border-black/10 rounded-2xl shadow-2xl p-4 z-50 text-xs text-start transition-all"
             >
-              <div className="flex items-center justify-between pb-2 border-b border-black/10 mb-2">
+              <div className="flex items-center justify-between pb-2.5 border-b border-black/10 mb-2.5">
                 <span className="font-bold text-black text-xs">
                   {t('navbar.notifications')} ({memberNotifications.length})
                 </span>
@@ -155,22 +158,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                   type="button"
                   onClick={() => setShowNotifications(false)}
                   aria-label={t('common.close')}
-                  className="text-xs text-[#696969] hover:text-black font-bold p-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
+                  className="w-6 h-6 rounded-lg hover:bg-black/10 flex items-center justify-center text-xs text-[#696969] hover:text-black font-bold cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb]"
                 >
                   ✕
                 </button>
               </div>
 
               {memberNotifications.length === 0 ? (
-                <div className="py-6 text-center text-[#696969] text-xs">
-                  {t('navbar.noNotifications')}
+                <div className="py-8 text-center text-[#696969] text-xs space-y-1">
+                  <div className="text-2xl mb-1">🔕</div>
+                  <p>{t('navbar.noNotifications')}</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {memberNotifications.map((notif) => (
                     <div
                       key={notif.id}
-                      className="p-2.5 rounded-[8px] bg-[#f7f4e3] border border-black/10 space-y-1"
+                      className="p-3 rounded-xl bg-[#f7f4e3] border border-black/10 space-y-1 hover:border-[#3139fb]/40 transition-colors shadow-2xs"
                     >
                       <div className="flex items-center justify-between font-bold text-black text-[11px]">
                         <span>{notif.title}</span>
@@ -188,7 +192,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <p className="text-[#696969] text-[11px] line-clamp-2">
                         &ldquo;{notif.content}&rdquo;
                       </p>
-                      <div className="text-[9px] text-[#696969] text-end">
+                      <div className="text-[9px] text-[#696969] text-end font-mono">
                         {new Date(notif.createdAt).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit',
@@ -208,14 +212,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           <img
             src={currentMember.avatarUrl || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}
             alt={currentMember.fullName}
-            className="w-8 h-8 rounded-full object-cover border border-black/20 shrink-0"
+            className="w-8 h-8 rounded-full object-cover ring-2 ring-black/10 shadow-xs shrink-0"
           />
           <div className="hidden lg:block text-start">
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-bold text-black leading-none">
                 {currentMember.fullName}
               </span>
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/5 text-[#696969] capitalize">
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-black/5 text-[#696969] capitalize">
                 {currentMember.role}
               </span>
             </div>
