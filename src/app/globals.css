@@ -261,3 +261,95 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.35);
 }
+
+/* ==========================================================================
+   Antigravity Spatial Design & Glassmorphism System
+   Principles: Weightlessness, Depth, Frosted Glass, Smooth Motion Physics
+   ========================================================================== */
+
+:root {
+  --shadow-floating: 0 16px 36px -12px rgba(0, 0, 0, 0.08), 0 0 1px 1px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 20px 40px -15px rgba(0, 0, 0, 0.1), 0 8px 16px -8px rgba(0, 0, 0, 0.05);
+  --shadow-glow-blue: 0 0 24px -4px rgba(49, 57, 251, 0.28);
+  --glass-highlight: inset 0 1px 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+/* Frosted Glass Header Bar */
+.glass-header {
+  background-color: rgba(255, 252, 236, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02);
+}
+
+/* Floating Glass Dock */
+.glass-dock {
+  background-color: rgba(255, 252, 236, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-floating);
+}
+
+/* Dark Glass Floating Action Bar */
+.glass-dock-dark {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.92), rgba(0, 3, 84, 0.95));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 24px 48px -12px rgba(0, 3, 84, 0.35);
+}
+
+/* Antigravity Floating Card with Physics-Based Lift */
+.float-card {
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.28s ease;
+  will-change: transform, box-shadow;
+}
+
+.float-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Subtle Interactive Scale Button */
+.btn-press {
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* Electric Glow Accent */
+.glow-blue {
+  box-shadow: var(--shadow-glow-blue);
+}
+
+/* Micro-Floating Beacon Animation */
+@keyframes antigravity-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.animate-float {
+  animation: antigravity-float 3.5s ease-in-out infinite;
+}
+
+/* Respect OS Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+  .float-card,
+  .btn-press,
+  .editorial-cta-card,
+  .editorial-btn-primary,
+  .animate-float {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
