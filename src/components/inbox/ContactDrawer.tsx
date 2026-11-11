@@ -59,15 +59,15 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({
       className="w-80 shrink-0 border-s border-black/10 bg-[#fffcec] flex flex-col h-full overflow-y-auto select-none text-start"
     >
       {/* Header with Large Close Button */}
-      <div className="h-16 px-4 border-b border-black/10 flex items-center justify-between shrink-0">
-        <span className="text-xs font-bold text-black">
+      <div className="h-16 px-5 glass-header flex items-center justify-between shrink-0 sticky top-0 z-10 transition-colors">
+        <span className="text-xs font-bold text-black uppercase tracking-wider font-mono">
           {t('drawer.customerProfile')}
         </span>
         <button
           type="button"
           onClick={onClose}
           aria-label={t('common.close')}
-          className="px-2.5 py-1 rounded-[8px] bg-[#f7f4e3] hover:bg-black hover:text-[#fffcec] border border-black/15 text-black text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-[#3139fb]"
+          className="btn-press px-2.5 py-1 rounded-xl bg-[#f7f4e3] hover:bg-black hover:text-[#fffcec] border border-black/15 text-black text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-[#3139fb]"
           title="Close Customer Profile (Esc)"
         >
           <span>{t('common.close')}</span>
@@ -77,7 +77,7 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({
 
       <div className="p-5 space-y-6">
         {/* Profile Card */}
-        <div className="text-center p-4 rounded-[12px] bg-[#f7f4e3] border border-black/10">
+        <div className="text-center p-5 rounded-2xl bg-gradient-to-b from-[#f7f4e3] to-[#f2efd6] border border-black/10 shadow-xs float-card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={
@@ -85,7 +85,7 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({
               'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'
             }
             alt={contact.name}
-            className="w-16 h-16 rounded-full object-cover mx-auto mb-2.5 border border-black/20"
+            className="w-16 h-16 rounded-full object-cover mx-auto mb-2.5 ring-2 ring-black/10 shadow-xs"
           />
           <h3 className="font-bold text-sm text-black truncate">
             {contact.name}
@@ -102,11 +102,11 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({
 
         {/* AI Summary Card */}
         {isAiSummaryLoading ? (
-          <div className="p-4 rounded-[12px] bg-[#f7f4e3] border border-black/15 animate-pulse text-xs text-[#696969] font-medium">
+          <div className="p-4 rounded-xl bg-[#f7f4e3] border border-black/15 animate-pulse text-xs text-[#696969] font-medium">
             ✨ Generating AI summary of this conversation...
           </div>
         ) : aiSummary ? (
-          <div className="p-4 rounded-[12px] bg-[#f7f4e3] border border-black/15 text-xs space-y-2">
+          <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-50/80 to-[#f7f4e3] border border-indigo-200/60 shadow-xs text-xs space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-black flex items-center gap-1">
                 <span>✨</span> AI Chat Summary

@@ -281,7 +281,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             aria-label={t('inbox.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#f7f4e3] text-black border border-black/15 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff] rounded-[8px] ps-3 pe-7 py-2 text-xs outline-none placeholder-[#696969] text-start"
+            className="w-full bg-[#f7f4e3] text-black border border-black/15 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff]/50 rounded-xl ps-3.5 pe-8 py-2 text-xs outline-none placeholder-[#696969] text-start shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] transition-all"
           />
           {searchQuery && (
             <button
@@ -298,7 +298,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 
         {/* 5-Tab Filter Row (All, Mine, Free, Snoozed, Done) */}
         <div
-          className="grid grid-cols-5 gap-1 bg-[#f7f4e3] p-1 rounded-[8px] border border-black/10"
+          className="grid grid-cols-5 gap-1 bg-[#f7f4e3] p-1 rounded-xl border border-black/10 shadow-2xs"
           role="tablist"
           aria-label="Conversation Status Filters"
         >
@@ -318,9 +318,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 aria-selected={isActive}
                 aria-label={`${tab.label} (${tab.count})`}
                 onClick={() => setFilter(tab.id as ConversationFilter)}
-                className={`py-1.5 px-0.5 rounded-[6px] text-[10.5px] font-semibold transition-all flex flex-col items-center justify-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
+                className={`py-1.5 px-0.5 rounded-lg text-[10.5px] font-semibold transition-all flex flex-col items-center justify-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
                   isActive
-                    ? 'bg-black text-[#fffcec] shadow-xs'
+                    ? 'bg-black text-[#fffcec] shadow-xs scale-[1.02]'
                     : 'text-[#696969] hover:text-black hover:bg-black/5'
                 }`}
               >
@@ -457,10 +457,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                     onSelectConversation(conv.id);
                   }
                 }}
-                className={`p-3 cursor-pointer transition-colors flex items-start gap-2.5 relative outline-none focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
+                className={`p-3.5 cursor-pointer transition-all duration-200 flex items-start gap-2.5 relative outline-none focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
                   isSelected
-                    ? 'bg-[#f7f4e3] border-s-4 border-[#3139fb]'
-                    : 'hover:bg-[#f7f4e3]/60'
+                    ? 'bg-[#f7f4e3] border-s-4 border-[#3139fb] shadow-2xs'
+                    : 'hover:bg-[#f7f4e3]/80 hover:translate-x-0.5'
                 }`}
               >
                 {/* Multi-Select Checkbox */}
@@ -568,7 +568,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         <div
           role="region"
           aria-label="Bulk actions bar"
-          className="absolute bottom-3 start-3 end-3 bg-black text-[#fffcec] p-2.5 rounded-[10px] shadow-lg flex items-center justify-between gap-2 z-20 animate-fade-in border border-black/20"
+          className="absolute bottom-3 start-3 end-3 glass-dock-dark text-[#fffcec] p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-2 z-20 animate-in fade-in-0 slide-in-from-bottom-2 duration-200"
         >
           <div className="text-[11px] font-bold truncate">
             {t('inbox.selectedCount', { count: selectedIds.length })}

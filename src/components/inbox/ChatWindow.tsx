@@ -244,7 +244,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 bg-[#fffcec] relative overflow-hidden select-text">
       {/* Clean Chat Header */}
-      <div className="h-16 px-4 md:px-6 border-b border-black/10 bg-[#fffcec] flex items-center justify-between gap-3 shrink-0 z-10">
+      <div className="h-16 px-4 md:px-6 glass-header flex items-center justify-between gap-3 shrink-0 z-10 sticky top-0 transition-colors">
         <div className="flex items-center gap-3 min-w-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -253,7 +253,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'
             }
             alt={conversation.contact.name}
-            className="w-10 h-10 rounded-full object-cover border border-black/15 shrink-0"
+            className="w-10 h-10 rounded-full object-cover ring-2 ring-black/10 shadow-xs shrink-0"
           />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -267,7 +267,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               {conversation.labels?.map((lbl) => (
                 <span
                   key={lbl}
-                  className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#3139fb]/10 text-[#3139fb] border border-[#3139fb]/20"
+                  className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#3139fb]/10 text-[#3139fb] border border-[#3139fb]/20 shadow-2xs"
                 >
                   #{lbl}
                   {onRemoveLabel && (
@@ -283,20 +283,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </span>
               ))}
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] truncate">
-              <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isWindowOpen ? 'bg-[#3139fb]' : 'bg-[#fb3a4d]'
-                }`}
-              />
-              <span
-                className={`font-semibold truncate ${
-                  isWindowOpen ? 'text-[#3139fb]' : 'text-[#fb3a4d]'
-                }`}
-              >
-                {isWindowOpen
-                  ? `WhatsApp Active • ${CareWindowService.formatCountdown(remainingWindowMs)}`
-                  : 'Care Window Closed • Template Messages Only'}
+            <div className="flex items-center gap-1.5 text-[11px] truncate mt-0.5">
+              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-semibold border ${
+                isWindowOpen
+                  ? 'bg-[#3139fb]/10 text-[#3139fb] border-[#3139fb]/25'
+                  : 'bg-[#fb3a4d]/10 text-[#fb3a4d] border-[#fb3a4d]/25'
+              }`}>
+                <span className="relative flex h-2 w-2">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    isWindowOpen ? 'bg-[#3139fb]' : 'bg-[#fb3a4d]'
+                  }`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                    isWindowOpen ? 'bg-[#3139fb]' : 'bg-[#fb3a4d]'
+                  }`}></span>
+                </span>
+                <span className="truncate">
+                  {isWindowOpen
+                    ? `WhatsApp Care Window • ${CareWindowService.formatCountdown(remainingWindowMs)}`
+                    : 'Care Window Closed • Template Messages Only'}
+                </span>
               </span>
             </div>
           </div>
@@ -585,10 +590,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[82%] md:max-w-[68%] px-4 py-3 rounded-[14px] relative break-words ${
+                  className={`max-w-[82%] md:max-w-[68%] px-4 py-3 rounded-2xl relative break-words transition-all duration-200 ${
                     isOutbound
-                      ? 'bg-black text-[#fffcec] rounded-br-[4px] shadow-xs'
-                      : 'bg-[#f7f4e3] text-black border border-black/15 rounded-bl-[4px]'
+                      ? 'bg-gradient-to-br from-black via-black to-[#000354] text-[#fffcec] rounded-br-xs shadow-md shadow-black/10 border border-white/10 hover:shadow-lg'
+                      : 'bg-[#f7f4e3] text-black border border-black/10 rounded-bl-xs shadow-2xs hover:shadow-xs'
                   }`}
                 >
                   {!isOutbound && (
@@ -730,7 +735,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       </div>
 
       {/* Composer & Floating Popovers Wrapper */}
-      <div className="relative shrink-0 bg-[#fffcec] border-t border-black/10 p-3.5 md:p-4">
+      <div className="relative shrink-0 glass-dock border-t border-black/10 p-3.5 md:p-4 rounded-t-2xl shadow-lg">
         {/* Floating Canned Quick Replies Panel */}
         {showCannedReplies && (
           <div className="absolute bottom-full left-0 right-0 z-30 bg-[#f7f4e3] border-t border-b border-black/20 p-4 max-h-72 overflow-y-auto shadow-lg">
@@ -1099,7 +1104,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 ? '⏱️ Customer care window is closed (>24h). Choose a template above.'
                 : t('chat.composerPlaceholder')
             }
-            className="flex-1 min-w-0 p-3 bg-[#f7f4e3] text-black border border-black/20 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff] rounded-[10px] text-xs md:text-sm outline-none resize-none placeholder-[#696969] disabled:opacity-60 disabled:cursor-not-allowed text-start"
+            className="flex-1 min-w-0 p-3.5 bg-[#f7f4e3] text-black border border-black/20 focus:border-[#3139fb] focus:ring-2 focus:ring-[#96c4ff]/50 rounded-xl text-xs md:text-sm outline-none resize-none placeholder-[#696969] disabled:opacity-60 disabled:cursor-not-allowed text-start shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] transition-all"
           />
 
           <button
@@ -1107,7 +1112,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             onClick={handleSend}
             disabled={(!isWindowOpen && !isInternalNote) || !inputText.trim() || isSending}
             aria-label={isInternalNote ? "Save internal note" : t('chat.send')}
-            className="h-[58px] px-5 rounded-[14px] bg-black hover:bg-[#000354] text-[#fffcec] font-bold text-xs md:text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center gap-2 cursor-pointer shadow-xs focus-visible:ring-2 focus-visible:ring-[#3139fb]"
+            className="h-[58px] px-6 rounded-2xl bg-gradient-to-r from-black via-black to-[#000354] hover:from-[#000354] hover:to-[#3139fb] text-[#fffcec] font-bold text-xs md:text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center gap-2 cursor-pointer shadow-md shadow-black/15 focus-visible:ring-2 focus-visible:ring-[#3139fb]"
           >
             <span>
               {isSending
