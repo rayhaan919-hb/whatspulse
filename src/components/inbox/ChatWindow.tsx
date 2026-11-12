@@ -256,32 +256,34 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             className="w-10 h-10 rounded-full object-cover ring-2 ring-black/10 shadow-xs shrink-0"
           />
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-black truncate">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-bold text-sm text-black shrink-0 max-w-[160px] truncate">
                 {conversation.contact.name}
               </span>
-              <span className="text-xs text-[#696969] font-mono hidden sm:inline shrink-0">
+              <span className="text-xs text-[#696969] font-mono hidden xl:inline shrink-0">
                 {conversation.contact.phoneNumber}
               </span>
               {/* Labels Badges in Header */}
-              {conversation.labels?.map((lbl) => (
-                <span
-                  key={lbl}
-                  className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#3139fb]/10 text-[#3139fb] border border-[#3139fb]/20 shadow-2xs"
-                >
-                  #{lbl}
-                  {onRemoveLabel && (
-                    <button
-                      type="button"
-                      onClick={() => onRemoveLabel(lbl)}
-                      className="hover:text-red-500 font-bold ml-0.5 cursor-pointer"
-                      title={`Remove #${lbl}`}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </span>
-              ))}
+              <div className="hidden lg:flex items-center gap-1 overflow-hidden">
+                {conversation.labels?.map((lbl) => (
+                  <span
+                    key={lbl}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#3139fb]/10 text-[#3139fb] border border-[#3139fb]/20 shadow-2xs shrink-0"
+                  >
+                    #{lbl}
+                    {onRemoveLabel && (
+                      <button
+                        type="button"
+                        onClick={() => onRemoveLabel(lbl)}
+                        className="hover:text-red-500 font-bold ml-0.5 cursor-pointer"
+                        title={`Remove #${lbl}`}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
             </div>
             <div className="flex items-center gap-1.5 text-[11px] truncate mt-0.5">
               <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-semibold border ${
@@ -1003,24 +1005,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
             )}
 
-            {/* Template Selector Trigger */}
-            {!isInternalNote && (
-              <button
-                type="button"
-                onClick={toggleTemplates}
-                aria-label="Pre-approved WhatsApp Templates"
-                className={`px-3 py-1 rounded-[8px] border text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
-                  showTemplates
-                    ? 'bg-black text-[#fffcec] border-black'
-                    : 'bg-[#fffcec] text-black border-black/20 hover:bg-[#f7f4e3]'
-                }`}
-                title="Send pre-approved Meta template"
-              >
-                <span>📋</span>
-                <span>Templates</span>
-              </button>
-            )}
-
             {/* Mention Teammate Trigger (Internal Note Mode) */}
             {isInternalNote && (
               <button
@@ -1037,12 +1021,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
             )}
 
-            {/* Template Picker Trigger */}
+            {/* Template Selector Trigger */}
             {!isInternalNote && (
               <button
                 type="button"
                 onClick={toggleTemplates}
-                className={`px-3 py-1 rounded-[8px] border text-xs font-semibold transition-all cursor-pointer ${
+                aria-label="Pre-approved WhatsApp Templates"
+                title="Send pre-approved Meta template"
+                className={`px-3 py-1 rounded-[8px] border text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#3139fb] ${
                   !isWindowOpen
                     ? 'bg-[#3139fb] hover:bg-[#000354] text-[#fffcec] border-[#3139fb] font-bold shadow-xs'
                     : showTemplates

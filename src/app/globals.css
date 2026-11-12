@@ -17,6 +17,14 @@
   --editorial-ink: #000000;
   --editorial-ink-muted: #696969;
 
+  /* Semantic component aliases */
+  --canvas-warm: var(--editorial-canvas);
+  --surface-primary: var(--editorial-surface);
+  --border-subtle: var(--editorial-border);
+  --ink-primary: var(--editorial-ink);
+  --ink-muted: var(--editorial-ink-muted);
+  --accent-blue: var(--editorial-blue);
+
   /* Backward-compatible variable aliases */
   --arc-canvas: var(--editorial-canvas);
   --arc-surface: var(--editorial-surface);
@@ -54,9 +62,10 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   margin: 0;
   padding: 0;
-  height: 100%;
+  min-height: 100%;
   width: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   -webkit-font-smoothing: antialiased;
 }
 

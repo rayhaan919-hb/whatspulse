@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { Locale, Direction, LocaleMetadata } from './locales.ts';
 import { DEFAULT_LOCALE } from './locales.ts';
 import { I18nService } from './i18n-service.ts';
@@ -15,25 +15,69 @@ interface I18nContextValue {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window === 'undefined') return DEFAULT_LOCALE;
-    try {
-      const saved = localStorage.getItem('whatspulse_locale');
-      if (saved && I18nService.isSupportedLocale(saved)) {
-        return saved;
-      }
+let memoryLocale: Locale | null = null;
+const localeListeners = new Set<() => void>();
 
-      // Check browser navigator language
-      const browserLang = navigator.language?.split('-')[0];
-      if (browserLang && I18nService.isSupportedLocale(browserLang)) {
-        return browserLang;
-      }
-    } catch {
-      // Ignore localStorage restrictions
+function notifyLocaleListeners() {
+  localeListeners.forEach((listener) => listener());
+}
+
+function subscribeLocale(listener: () => void): () => void {
+  localeListeners.add(listener);
+  if (typeof window === 'undefined') {
+    return () => {
+      localeListeners.delete(listener);
+    };
+  }
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === 'whatspulse_locale' || event.key === null) {
+      memoryLocale = null;
+      notifyLocaleListeners();
     }
-    return DEFAULT_LOCALE;
-  });
+  };
+  window.addEventListener('storage', handleStorage);
+  return () => {
+    localeListeners.delete(listener);
+    window.removeEventListener('storage', handleStorage);
+  };
+}
+
+function getClientLocaleSnapshot(): Locale {
+  if (typeof window === 'undefined') return DEFAULT_LOCALE;
+  try {
+    const saved = localStorage.getItem('whatspulse_locale');
+    if (saved && I18nService.isSupportedLocale(saved)) {
+      return saved;
+    }
+
+    if (memoryLocale) {
+      return memoryLocale;
+    }
+
+    // Check browser navigator language
+    const browserLang = navigator.language?.split('-')[0];
+    if (browserLang && I18nService.isSupportedLocale(browserLang)) {
+      return browserLang;
+    }
+  } catch {
+    if (memoryLocale) {
+      return memoryLocale;
+    }
+  }
+  return DEFAULT_LOCALE;
+}
+
+function getServerLocaleSnapshot(): Locale {
+  return DEFAULT_LOCALE;
+}
+
+export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Always hydrate on DEFAULT_LOCALE first so SSR HTML matches client render, then sync browser locale cleanly
+  const locale = useSyncExternalStore(
+    subscribeLocale,
+    getClientLocaleSnapshot,
+    getServerLocaleSnapshot
+  );
 
   const dir = useMemo(() => I18nService.getDirection(locale), [locale]);
 
@@ -46,12 +90,13 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [locale, dir]);
 
   const setLocale = useCallback((newLocale: Locale) => {
-    setLocaleState(newLocale);
+    memoryLocale = newLocale;
     try {
       localStorage.setItem('whatspulse_locale', newLocale);
     } catch {
       // Ignore localStorage restrictions
     }
+    notifyLocaleListeners();
   }, []);
 
   const t = useCallback(
